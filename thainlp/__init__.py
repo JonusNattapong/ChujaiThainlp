@@ -1,20 +1,47 @@
 """
-ThaiNLP - A Python library for Thai Natural Language Processing
+Thai Natural Language Processing Library
 """
 
+from .core import (
+    word_tokenize,
+    sentence_tokenize,
+    normalize,
+    is_thai,
+    count_thai_chars,
+    remove_thai_vowels,
+    is_palindrome
+)
+
+from .transliteration import (
+    thai_to_roman,
+    roman_to_thai
+)
+
+from .sentiment import analyze_sentiment
+from .pos_tag import pos_tag
+from .ner import find_entities
+from .summarize import summarize
+from .spellcheck import check_spelling
+
 __version__ = "0.1.0"
-
-from thainlp.tokenize import word_tokenize
-from thainlp.tag import pos_tag
-from thainlp.ner import find_entities
-from thainlp.sentiment import analyze_sentiment
-from thainlp.util import remove_tonemarks, normalize_text
-
 __all__ = [
+    # Core functions
     "word_tokenize",
+    "sentence_tokenize",
+    "normalize",
+    "is_thai",
+    "count_thai_chars",
+    "remove_thai_vowels",
+    "is_palindrome",
+    
+    # Transliteration functions
+    "thai_to_roman",
+    "roman_to_thai",
+    
+    # Advanced NLP functions
+    "analyze_sentiment",
     "pos_tag",
     "find_entities",
-    "analyze_sentiment",
-    "remove_tonemarks",
-    "normalize_text",
+    "summarize",
+    "check_spelling"
 ]

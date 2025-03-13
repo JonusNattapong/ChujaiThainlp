@@ -1,88 +1,132 @@
-# ThaiNLP Basic
+# Thai Natural Language Processing Library
 
-A Python library for Thai Natural Language Processing tasks.
+ไลบรารี่สำหรับประมวลผลภาษาธรรมชาติภาษาไทย (Thai NLP) ที่มีประสิทธิภาพและใช้งานง่าย
 
-## Installation
+## คุณสมบัติ
+
+- การแยกคำ (Word Tokenization)
+- การวิเคราะห์ความรู้สึก (Sentiment Analysis)
+- การระบุชนิดของคำ (POS Tagging)
+- การระบุชื่อเฉพาะ (Named Entity Recognition)
+- การแปลงเสียงภาษาไทยเป็นอักษรโรมัน (Thai Romanization)
+
+## การติดตั้ง
 
 ```bash
-pip install nlpbasiczombitx64
+pip install thainlp
 ```
 
-## Features
+## วิธีการใช้งาน
 
-- Thai word tokenization
-- Thai character/syllable processing
-- Part-of-speech tagging
-- Named entity recognition
-- Sentiment analysis
-- Text summarization
-- Spell checking
-- Text classification
-- Language utilities
-
-## Usage
+### 1. การแยกคำ (Word Tokenization)
 
 ```python
-import thainlp
+from thainlp import word_tokenize
 
-# Word tokenization (using default PyThaiNLP engine)
-tokens = thainlp.word_tokenize("การเดินทางไปท่องเที่ยวที่จังหวัดเชียงใหม่ในฤดูหนาวเป็นประสบการณ์ที่น่าจดจำ")
-print(tokens)
-
-# Word tokenization (specifying PyThaiNLP engine)
-tokens = thainlp.word_tokenize("นักวิจัยกำลังศึกษาปรากฏการณ์ทางธรรมชาติที่ซับซ้อน", engine="pythainlp:longest")
-print(tokens)
-
-# Part-of-speech tagging (using default PyThaiNLP engine and UD tagset)
-pos_tags = thainlp.pos_tag("การประชุมวิชาการนานาชาติจะจัดขึ้นในเดือนหน้า")
-print(pos_tags)
-
-# Part-of-speech tagging (specifying PyThaiNLP engine and tagset, and converting to ORCHID)
-pos_tags = thainlp.pos_tag("เศรษฐกิจของประเทศไทยกำลังฟื้นตัวอย่างช้าๆ", engine="pythainlp", tagset="orchid", return_tagset="ud")
-print(pos_tags)
-
-# Text summarization
-text = """
-การพัฒนาเทคโนโลยีปัญญาประดิษฐ์ (AI) กำลังเปลี่ยนแปลงโลกในหลายด้าน
-AI ถูกนำมาใช้ในอุตสาหกรรมต่างๆ เช่น การแพทย์ การเงิน การศึกษา และการขนส่ง
-อย่างไรก็ตาม การพัฒนา AI ก็มีความท้าทายหลายประการ เช่น ความเป็นส่วนตัว ความปลอดภัย และจริยธรรม
-"""
-summary = thainlp.summarize(text, n_sentences=2)
-print(summary)
-
-# Spell checking
-misspelled = thainlp.spellcheck("ฉันไปเทียวทะเลขาว")
-print(misspelled)
-
-# Text classification
-label = thainlp.classify("ภาพยนตร์เรื่องนี้สนุกมาก")  # Example: Sentiment analysis
-print(label)
+text = "สวัสดีครับ ยินดีต้อนรับสู่ไลบรารี่ ThaiNLP"
+words = word_tokenize(text)
+print(words)
+# ผลลัพธ์: ['สวัสดี', 'ครับ', 'ยินดี', 'ต้อนรับ', 'สู่', 'ไลบรารี่', 'ThaiNLP']
 ```
 
-## Custom Dictionaries and Stopwords
-
-You can use custom dictionaries and stopwords by providing file paths:
+### 2. การวิเคราะห์ความรู้สึก (Sentiment Analysis)
 
 ```python
-from thainlp.resources import combine_dictionaries
+from thainlp import analyze_sentiment
 
-words, stopwords = combine_dictionaries(custom_dict_path="path/to/dict.txt",
-                                        custom_stopwords_path="path/to/stopwords.txt")
-
-# You can then use these with the tokenization and spell checking functions.
-# (Implementation for integrating custom dictionaries into all functions is TODO)
+text = "วันนี้อากาศดีมากๆ ทำให้รู้สึกสดชื่นและมีความสุข"
+score, label, words = analyze_sentiment(text)
+print(f"คะแนนความรู้สึก: {score}")
+print(f"ประเภท: {label}")
+print(f"คำที่พบ: {words}")
+# ผลลัพธ์:
+# คะแนนความรู้สึก: 0.8
+# ประเภท: very_positive
+# คำที่พบ: {'positive': ['ดี', 'สดชื่น', 'สุข'], 'negative': [], 'neutral': []}
 ```
 
-## Available PyThaiNLP Engines
+### 3. การระบุชนิดของคำ (POS Tagging)
 
-For tokenization and POS tagging, you can specify different PyThaiNLP engines.
-Refer to the PyThaiNLP documentation for the most up-to-date list. Some common
-engines include:
+```python
+from thainlp import pos_tag
 
-- `newmm` (default): New Maximum Matching
-- `longest`: Longest Matching
-- `attacut`: Dictionary-based with Attention
+text = "ผมชอบกินข้าวผัดมาก"
+pos = pos_tag(text)
+print(pos)
+# ผลลัพธ์: [('ผม', 'PRON'), ('ชอบ', 'VERB'), ('กิน', 'VERB'), ('ข้าว', 'NOUN'), ('ผัด', 'VERB'), ('มาก', 'ADV')]
+```
 
-## License
+### 4. การระบุชื่อเฉพาะ (Named Entity Recognition)
 
-MIT
+```python
+from thainlp import find_entities
+
+text = "สมชาย ไปเที่ยวกรุงเทพมหานคร กับบริษัท ABC จำกัด เมื่อวันที่ 1/1/2024"
+entities = find_entities(text)
+print(entities)
+# ผลลัพธ์: [
+#   ('สมชาย', 'PERSON', 0, 2, 0.9),
+#   ('กรุงเทพมหานคร', 'LOCATION', 8, 15, 1.0),
+#   ('บริษัท ABC จำกัด', 'ORGANIZATION', 18, 27, 1.0),
+#   ('1/1/2024', 'DATE', 35, 44, 1.0)
+# ]
+```
+
+### 5. การแปลงเสียงภาษาไทยเป็นอักษรโรมัน (Thai Romanization)
+
+```python
+from thainlp import thai_to_roman
+
+text = "สวัสดี"
+roman = thai_to_roman(text)
+print(roman)
+# ผลลัพธ์: 'sawasdee'
+```
+
+## การปรับแต่ง
+
+### 1. เพิ่มคำศัพท์ใหม่
+
+```python
+from thainlp import add_word
+
+# เพิ่มคำศัพท์ใหม่
+add_word("คำใหม่")
+```
+
+### 2. เพิ่มคำหยุด (Stopwords)
+
+```python
+from thainlp import add_stopword
+
+# เพิ่มคำหยุดใหม่
+add_stopword("คำหยุด")
+```
+
+### 3. ปรับแต่งพจนานุกรม
+
+```python
+from thainlp import load_custom_dictionary
+
+# โหลดพจนานุกรมจากไฟล์
+dictionary = load_custom_dictionary("path/to/dictionary.txt")
+```
+
+## การมีส่วนร่วม
+
+เรายินดีรับการมีส่วนร่วมจากทุกท่าน! กรุณาตรวจสอบ [CONTRIBUTING.md](CONTRIBUTING.md) สำหรับรายละเอียดเพิ่มเติม
+
+## การทดสอบ
+
+```bash
+python -m pytest tests/
+```
+
+## การอนุญาต
+
+MIT License - ดูรายละเอียดเพิ่มเติมใน [LICENSE](LICENSE)
+
+## การติดต่อ
+
+- GitHub Issues: [รายงานปัญหา](https://github.com/JonusNattapong)
+- Email: zombitx64@gmail.com
