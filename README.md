@@ -1,14 +1,41 @@
-# Thai Natural Language Processing Library
+# ThaiNLP
 
-ไลบรารี่สำหรับประมวลผลภาษาธรรมชาติภาษาไทย (Thai NLP) ที่มีประสิทธิภาพและใช้งานง่าย
+ไลบรารีสำหรับการประมวลผลภาษาธรรมชาติไทย (Thai Natural Language Processing)
 
 ## คุณสมบัติ
 
-- การแยกคำ (Word Tokenization)
-- การวิเคราะห์ความรู้สึก (Sentiment Analysis)
-- การระบุชนิดของคำ (POS Tagging)
-- การระบุชื่อเฉพาะ (Named Entity Recognition)
-- การแปลงเสียงภาษาไทยเป็นอักษรโรมัน (Thai Romanization)
+ThaiNLP มีฟีเจอร์ต่างๆ ดังนี้:
+
+### 1. การตัดคำ (Tokenization)
+- ใช้อัลกอริธึม Maximum Matching สำหรับการตัดคำภาษาไทย
+- มีดิกชันนารีคำศัพท์ภาษาไทยที่ครอบคลุม
+
+### 2. การแท็กส่วนของคำพูด (Part-of-Speech Tagging)
+- ใช้โมเดล Hidden Markov Model (HMM) สำหรับการแท็กส่วนของคำพูด
+- รองรับการฝึกโมเดลด้วยข้อมูลที่มีการแท็กไว้แล้ว
+
+### 3. การรู้จำหน่วยงานที่มีชื่อเสียง (Named Entity Recognition)
+- ใช้กฎและดิกชันนารีสำหรับการรู้จำหน่วยงานที่มีชื่อเสียง
+- รองรับการรู้จำชื่อบุคคล สถานที่ องค์กร วันที่ เวลา เงิน URL และแฮชแท็ก
+
+### 4. การวิเคราะห์อารมณ์ (Sentiment Analysis)
+- ใช้ดิกชันนารีคำศัพท์ที่มีอารมณ์บวกและลบ
+- รองรับการวิเคราะห์อารมณ์ของข้อความภาษาไทย
+
+### 5. การตรวจสอบการสะกดคำ (Spell Checking)
+- ใช้ Edit Distance สำหรับการตรวจสอบและแก้ไขการสะกดคำ
+- รองรับการตรวจสอบการสะกดคำภาษาไทย
+
+### 6. การสรุปข้อความ (Text Summarization)
+- ใช้อัลกอริธึม TextRank สำหรับการสรุปข้อความ
+- รองรับการสรุปข้อความภาษาไทย
+
+### 7. เครื่องมือช่วยเหลือ (Utilities)
+- การตรวจสอบอักขระภาษาไทย
+- การลบวรรณยุกต์และรูปแบบต่างๆ
+- การแปลงข้อความให้เป็นมาตรฐาน
+- การแปลงภาษาไทยเป็นอักษรโรมัน
+- การตรวจสอบภาษา
 
 ## การติดตั้ง
 
@@ -16,117 +43,128 @@
 pip install thainlp
 ```
 
-## วิธีการใช้งาน
+## การใช้งาน
 
-### 1. การแยกคำ (Word Tokenization)
-
-```python
-from thainlp import word_tokenize
-
-text = "สวัสดีครับ ยินดีต้อนรับสู่ไลบรารี่ ThaiNLP"
-words = word_tokenize(text)
-print(words)
-# ผลลัพธ์: ['สวัสดี', 'ครับ', 'ยินดี', 'ต้อนรับ', 'สู่', 'ไลบรารี่', 'ThaiNLP']
-```
-
-### 2. การวิเคราะห์ความรู้สึก (Sentiment Analysis)
+### การตัดคำ (Tokenization)
 
 ```python
-from thainlp import analyze_sentiment
+from thainlp import tokenize
 
-text = "วันนี้อากาศดีมากๆ ทำให้รู้สึกสดชื่นและมีความสุข"
-score, label, words = analyze_sentiment(text)
-print(f"คะแนนความรู้สึก: {score}")
-print(f"ประเภท: {label}")
-print(f"คำที่พบ: {words}")
-# ผลลัพธ์:
-# คะแนนความรู้สึก: 0.8
-# ประเภท: very_positive
-# คำที่พบ: {'positive': ['ดี', 'สดชื่น', 'สุข'], 'negative': [], 'neutral': []}
+text = "ผมชอบกินข้าวที่ร้านอาหารไทย"
+tokens = tokenize(text)
+print(tokens)  # ['ผม', 'ชอบ', 'กิน', 'ข้าว', 'ที่', 'ร้าน', 'อาหาร', 'ไทย']
 ```
 
-### 3. การระบุชนิดของคำ (POS Tagging)
+### การแท็กส่วนของคำพูด (Part-of-Speech Tagging)
 
 ```python
 from thainlp import pos_tag
 
-text = "ผมชอบกินข้าวผัดมาก"
-pos = pos_tag(text)
-print(pos)
-# ผลลัพธ์: [('ผม', 'PRON'), ('ชอบ', 'VERB'), ('กิน', 'VERB'), ('ข้าว', 'NOUN'), ('ผัด', 'VERB'), ('มาก', 'ADV')]
+text = "ผมกินข้าว"
+tokens = tokenize(text)
+tagged = pos_tag(tokens)
+print(tagged)  # [('ผม', 'PRON'), ('กิน', 'VERB'), ('ข้าว', 'NOUN')]
 ```
 
-### 4. การระบุชื่อเฉพาะ (Named Entity Recognition)
+### การรู้จำหน่วยงานที่มีชื่อเสียง (Named Entity Recognition)
 
 ```python
-from thainlp import find_entities
+from thainlp import extract_entities
 
-text = "สมชาย ไปเที่ยวกรุงเทพมหานคร กับบริษัท ABC จำกัด เมื่อวันที่ 1/1/2024"
-entities = find_entities(text)
-print(entities)
-# ผลลัพธ์: [
-#   ('สมชาย', 'PERSON', 0, 2, 0.9),
-#   ('กรุงเทพมหานคร', 'LOCATION', 8, 15, 1.0),
-#   ('บริษัท ABC จำกัด', 'ORGANIZATION', 18, 27, 1.0),
-#   ('1/1/2024', 'DATE', 35, 44, 1.0)
-# ]
+text = "คุณสมชายอาศัยอยู่ที่จังหวัดเชียงใหม่และทำงานที่บริษัท ปตท. จำกัด"
+entities = extract_entities(text)
+print(entities)  # [('PERSON', 'คุณสมชาย', 0, 8), ('LOCATION', 'จังหวัดเชียงใหม่', 17, 31), ('ORGANIZATION', 'บริษัท ปตท. จำกัด', 41, 58)]
 ```
 
-### 5. การแปลงเสียงภาษาไทยเป็นอักษรโรมัน (Thai Romanization)
+### การวิเคราะห์อารมณ์ (Sentiment Analysis)
 
 ```python
-from thainlp import thai_to_roman
+from thainlp import analyze_sentiment
 
-text = "สวัสดี"
-roman = thai_to_roman(text)
-print(roman)
-# ผลลัพธ์: 'sawasdee'
+text = "วันนี้อากาศดีมากๆ ฉันมีความสุขมาก"
+score, label, words = analyze_sentiment(text)
+print(f"Score: {score}, Label: {label}")  # Score: 0.75, Label: very_positive
+print(f"Positive words: {words['positive']}")  # Positive words: ['ดี', 'มาก', 'สุข', 'มาก']
 ```
 
-## การปรับแต่ง
-
-### 1. เพิ่มคำศัพท์ใหม่
+### การตรวจสอบการสะกดคำ (Spell Checking)
 
 ```python
-from thainlp import add_word
+from thainlp import check_spelling
 
-# เพิ่มคำศัพท์ใหม่
-add_word("คำใหม่")
+text = "ผมชอบกนิข้าว"  # มีคำผิด "กนิ" (ที่ถูกคือ "กิน")
+results = check_spelling(text)
+print(results)  # [('กนิ', [('กิน', 0.67), ('กนี', 0.5)])]
 ```
 
-### 2. เพิ่มคำหยุด (Stopwords)
+### การสรุปข้อความ (Text Summarization)
 
 ```python
-from thainlp import add_stopword
+from thainlp import summarize_text
 
-# เพิ่มคำหยุดใหม่
-add_stopword("คำหยุด")
+text = """
+ประเทศไทยมีประชากรประมาณ 70 ล้านคน ตั้งอยู่ในภูมิภาคเอเชียตะวันออกเฉียงใต้ มีกรุงเทพมหานครเป็นเมืองหลวง
+ประเทศไทยมีภาษาไทยเป็นภาษาราชการ และมีวัฒนธรรมที่เป็นเอกลักษณ์
+อาหารไทยเป็นที่นิยมทั่วโลก เช่น ต้มยำกุ้ง ผัดไทย และแกงเขียวหวาน
+ประเทศไทยมีสถานที่ท่องเที่ยวที่สวยงามมากมาย เช่น เกาะพีพี เกาะสมุย และเชียงใหม่
+"""
+summary = summarize_text(text, num_sentences=2)
+print(summary)  # ประเทศไทยมีประชากรประมาณ 70 ล้านคน ตั้งอยู่ในภูมิภาคเอเชียตะวันออกเฉียงใต้ มีกรุงเทพมหานครเป็นเมืองหลวง ประเทศไทยมีสถานที่ท่องเที่ยวที่สวยงามมากมาย เช่น เกาะพีพี เกาะสมุย และเชียงใหม่
 ```
 
-### 3. ปรับแต่งพจนานุกรม
+### เครื่องมือช่วยเหลือ (Utilities)
 
 ```python
-from thainlp import load_custom_dictionary
+from thainlp import (
+    is_thai_char,
+    is_thai_word,
+    remove_tone_marks,
+    remove_diacritics,
+    normalize_text,
+    count_thai_words,
+    extract_thai_text,
+    thai_to_roman,
+    detect_language
+)
 
-# โหลดพจนานุกรมจากไฟล์
-dictionary = load_custom_dictionary("path/to/dictionary.txt")
+# ตรวจสอบอักขระภาษาไทย
+print(is_thai_char('ก'))  # True
+print(is_thai_char('a'))  # False
+
+# ลบวรรณยุกต์
+print(remove_tone_marks('สวัสดี'))  # สวสด
+
+# แปลงภาษาไทยเป็นอักษรโรมัน
+print(thai_to_roman('สวัสดี'))  # sawasdee
+
+# ตรวจสอบภาษา
+print(detect_language('สวัสดีครับ'))  # thai
+print(detect_language('Hello world'))  # english
+print(detect_language('สวัสดี Hello'))  # mixed
 ```
 
-## การมีส่วนร่วม
+## การพัฒนา
 
-เรายินดีรับการมีส่วนร่วมจากทุกท่าน! กรุณาตรวจสอบ [CONTRIBUTING.md](CONTRIBUTING.md) สำหรับรายละเอียดเพิ่มเติม
+สำหรับนักพัฒนาที่ต้องการมีส่วนร่วมในการพัฒนา ThaiNLP สามารถทำได้ดังนี้:
 
-## การทดสอบ
-
+1. Fork โปรเจคไปยัง GitHub repository ของคุณ
+2. Clone โปรเจค:
 ```bash
-python -m pytest tests/
+git clone https://github.com/yourusername/thainlp.git
+cd thainlp
 ```
 
-## การอนุญาต
+3. สร้าง virtual environment และติดตั้ง dependencies:
+```bash
+python -m venv venv
+source venv/bin/activate  # สำหรับ Linux/Mac
+venv\Scripts\activate     # สำหรับ Windows
+pip install -r requirements.txt
+```
 
-MIT License - ดูรายละเอียดเพิ่มเติมใน [LICENSE](LICENSE)
+4. ทำการแก้ไขและทดสอบ
+5. ส่ง Pull Request
 
-## การติดต่อ
+## ลิขสิทธิ์
 
-- GitHub Issues: [รายงานปัญหา](https://github.com/JonusNattapong)
-- Email: zombitx64@gmail.com
+ThaiNLP เผยแพร่ภายใต้ MIT License

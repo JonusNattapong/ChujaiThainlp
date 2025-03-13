@@ -1,14 +1,17 @@
 from setuptools import setup, find_packages
 
+with open("README.md", "r", encoding="utf-8") as fh:
+    long_description = fh.read()
+
 setup(
-    name="nlpbasiczombitx64",
+    name="thainlp",
     version="0.1.0",
-    author="JonusNattapong",
+    author="Zombitx64",
     author_email="zombitx64@gmail.com",
-    description="A basic Thai Natural Language Processing library",
-    long_description=open("README.md").read(),
+    description="Thai Natural Language Processing Library",
+    long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/JonusNattapong/nlpbasiczombitx64",
+    url="https://github.com/zombitx64/thainlp",
     packages=find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
@@ -20,11 +23,6 @@ setup(
     ],
     python_requires=">=3.6",
     install_requires=[
-        "nltk>=3.6.0",
-        "pythainlp>=2.3.0",  # Reference for dictionaries and models
         "numpy>=1.19.0",
-        "scikit-learn>=0.24.0",
-        "tqdm>=4.56.0",
     ],
-    include_package_data=True,
 )
