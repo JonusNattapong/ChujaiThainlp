@@ -1,366 +1,403 @@
 """
-Thai Text Feature Extraction Module
+Advanced Feature Extraction for Thai Language
 """
 
-from typing import Dict, List, Union, Optional, Any
-import re
-from collections import Counter
-import math
+from typing import List, Dict, Union, Optional, Any
+import torch
+import numpy as np
+from transformers import (
+    AutoModel,
+    AutoTokenizer,
+    PreTrainedModel,
+    PreTrainedTokenizer
+)
+from sentence_transformers import SentenceTransformer
+from pythainlp.tokenize import word_tokenize
+from pythainlp.tag import pos_tag
+from pythainlp.util import thai_characters, thai_digits
+from sklearn.feature_extraction.text import TfidfVectorizer
+from ..core.transformers import TransformerBase
 
-class ThaiFeatureExtractor:
-    def __init__(self):
-        """Initialize ThaiFeatureExtractor"""
-        # Thai vowels
-        self.vowels = [
-            'ะ', 'ั', 'า', 'ำ', 'ิ', 'ี', 'ึ', 'ื', 'ุ', 'ู',
-            'เ', 'แ', 'โ', 'ใ', 'ไ', '็', '่', '้', '๊', '๋',
-            '์', 'ํ', 'ๆ', 'ฯ'
-        ]
-        
-        # Thai consonants
-        self.consonants = [
-            'ก', 'ข', 'ฃ', 'ค', 'ฅ', 'ฆ', 'ง', 'จ', 'ฉ', 'ช',
-            'ซ', 'ฌ', 'ญ', 'ฎ', 'ฏ', 'ฐ', 'ฑ', 'ฒ', 'ณ', 'ด',
-            'ต', 'ถ', 'ท', 'ธ', 'น', 'บ', 'ป', 'ผ', 'ฝ', 'พ',
-            'ฟ', 'ภ', 'ม', 'ย', 'ร', 'ล', 'ว', 'ศ', 'ษ', 'ส',
-            'ห', 'ฬ', 'อ', 'ฮ'
-        ]
-        
-        # Thai tone marks
-        self.tone_marks = ['่', '้', '๊', '๋']
-        
-        # Thai digits
-        self.thai_digits = ['๐', '๑', '๒', '๓', '๔', '๕', '๖', '๗', '๘', '๙']
-        
-        # Common Thai words (simplified list)
-        self.common_words = [
-            'และ', 'หรือ', 'แต่', 'จะ', 'ที่', 'ของ', 'ใน', 'มี', 'เป็น', 'การ',
-            'ไม่', 'ได้', 'ให้', 'มา', 'ไป', 'กับ', 'ว่า', 'นี้', 'อยู่', 'คน',
-            'เรา', 'เขา', 'คุณ', 'ฉัน', 'ผม', 'ดี', 'ต้อง', 'เมื่อ', 'ถ้า', 'แล้ว'
-        ]
-        
-    def _count_char_types(self, text: str) -> Dict[str, int]:
-        """
-        Count different character types in text
+class ThaiFeatureExtractor(TransformerBase):
+    """Advanced feature extraction for Thai language"""
+    
+    def __init__(
+        self,
+        model_name_or_path: Optional[str] = None,
+        embedding_type: str = "contextual",
+        use_cuda: bool = True,
+        max_length: int = 512,
+        pooling_strategy: str = "mean",
+        domain_features: Optional[List[str]] = None,
+        **kwargs
+    ):
+        """Initialize feature extractor
         
         Args:
-            text (str): Input text
+            model_name_or_path: Name or path of the model
+            embedding_type: Type of embeddings (contextual, static, or both)
+            use_cuda: Whether to use GPU if available
+            max_length: Maximum sequence length
+            pooling_strategy: Strategy for pooling token embeddings
+            domain_features: List of domain-specific features to extract
+            **kwargs: Additional arguments for model initialization
+        """
+        if model_name_or_path is None:
+            model_name_or_path = "wangchanberta-base-att-spm-uncased"
             
-        Returns:
-            Dict[str, int]: Counts of different character types
-        """
-        counts = {
-            'consonants': 0,
-            'vowels': 0,
-            'tone_marks': 0,
-            'thai_digits': 0,
-            'arabic_digits': 0,
-            'spaces': 0,
-            'english_chars': 0,
-            'special_chars': 0,
-            'total_chars': len(text)
-        }
+        self.embedding_type = embedding_type
+        self.max_length = max_length
+        self.pooling_strategy = pooling_strategy
+        self.domain_features = domain_features or []
         
-        for char in text:
-            if char in self.consonants:
-                counts['consonants'] += 1
-            elif char in self.vowels:
-                counts['vowels'] += 1
-            elif char in self.tone_marks:
-                counts['tone_marks'] += 1
-            elif char in self.thai_digits:
-                counts['thai_digits'] += 1
-            elif char.isdigit():
-                counts['arabic_digits'] += 1
-            elif char.isspace():
-                counts['spaces'] += 1
-            elif 'a' <= char.lower() <= 'z':
-                counts['english_chars'] += 1
-            else:
-                counts['special_chars'] += 1
-                
-        return counts
+        super().__init__(
+            model_name_or_path=model_name_or_path,
+            task_type="feature_extraction",
+            **kwargs
+        )
         
-    def _calculate_char_ratios(self, counts: Dict[str, int]) -> Dict[str, float]:
-        """
-        Calculate character type ratios
+        # Initialize sentence transformer for static embeddings
+        if embedding_type in ["static", "both"]:
+            self.static_model = SentenceTransformer(
+                'paraphrase-multilingual-mpnet-base-v2',
+                device="cuda" if use_cuda and torch.cuda.is_available() else "cpu"
+            )
+            
+        # Initialize TF-IDF vectorizer
+        self.tfidf = TfidfVectorizer(tokenizer=word_tokenize)
+        
+    def _get_contextual_embeddings(
+        self,
+        texts: Union[str, List[str]],
+        layers: Optional[List[int]] = None
+    ) -> torch.Tensor:
+        """Get contextual embeddings from transformer model
         
         Args:
-            counts (Dict[str, int]): Character type counts
+            texts: Input text or list of texts
+            layers: List of layers to extract embeddings from
             
         Returns:
-            Dict[str, float]: Character type ratios
+            Tensor of embeddings
         """
-        total = counts['total_chars']
-        if total == 0:
-            return {k + '_ratio': 0.0 for k in counts if k != 'total_chars'}
+        # Prepare input
+        if isinstance(texts, str):
+            texts = [texts]
             
-        return {
-            k + '_ratio': v / total 
-            for k, v in counts.items() 
-            if k != 'total_chars'
-        }
+        # Tokenize
+        encoded = self.tokenizer(
+            texts,
+            padding=True,
+            truncation=True,
+            max_length=self.max_length,
+            return_tensors="pt"
+        )
         
-    def _count_word_frequencies(self, tokens: List[str]) -> Dict[str, int]:
-        """
-        Count word frequencies
-        
-        Args:
-            tokens (List[str]): List of tokens
+        # Move to GPU if available
+        if torch.cuda.is_available():
+            encoded = {k: v.cuda() for k, v in encoded.items()}
             
-        Returns:
-            Dict[str, int]: Word frequencies
-        """
-        return dict(Counter(tokens))
-        
-    def _calculate_tf_idf(self, tokens: List[str], document_freq: Dict[str, int], total_docs: int) -> Dict[str, float]:
-        """
-        Calculate TF-IDF scores for tokens
-        
-        Args:
-            tokens (List[str]): List of tokens
-            document_freq (Dict[str, int]): Document frequencies
-            total_docs (int): Total number of documents
+        # Get model outputs
+        with torch.no_grad():
+            outputs = self.model(
+                **encoded,
+                output_hidden_states=True
+            )
             
-        Returns:
-            Dict[str, float]: TF-IDF scores
-        """
-        # Count term frequencies
-        term_freq = Counter(tokens)
-        
-        # Calculate TF-IDF
-        tf_idf = {}
-        for term, freq in term_freq.items():
-            # Term frequency
-            tf = freq / len(tokens) if len(tokens) > 0 else 0
-            
-            # Inverse document frequency
-            doc_freq = document_freq.get(term, 1)  # Avoid division by zero
-            idf = math.log(total_docs / doc_freq) if doc_freq > 0 else 0
-            
-            # TF-IDF
-            tf_idf[term] = tf * idf
-            
-        return tf_idf
-        
-    def _extract_ngrams(self, tokens: List[str], n: int) -> List[str]:
-        """
-        Extract n-grams from tokens
-        
-        Args:
-            tokens (List[str]): List of tokens
-            n (int): n-gram size
-            
-        Returns:
-            List[str]: List of n-grams
-        """
-        ngrams = []
-        for i in range(len(tokens) - n + 1):
-            ngram = ' '.join(tokens[i:i+n])
-            ngrams.append(ngram)
-            
-        return ngrams
-        
-    def _calculate_text_statistics(self, text: str, tokens: List[str]) -> Dict[str, Union[int, float]]:
-        """
-        Calculate text statistics
-        
-        Args:
-            text (str): Input text
-            tokens (List[str]): List of tokens
-            
-        Returns:
-            Dict[str, Union[int, float]]: Text statistics
-        """
-        # Count sentences (simplified)
-        sentences = re.split(r'[.!?]\s+', text)
-        sentences = [s for s in sentences if s.strip()]
-        
-        # Calculate statistics
-        stats = {
-            'char_count': len(text),
-            'token_count': len(tokens),
-            'sentence_count': len(sentences),
-            'avg_token_length': sum(len(t) for t in tokens) / len(tokens) if tokens else 0,
-            'avg_sentence_length': len(tokens) / len(sentences) if sentences else 0,
-            'unique_token_ratio': len(set(tokens)) / len(tokens) if tokens else 0
-        }
-        
-        return stats
-        
-    def _extract_pos_patterns(self, pos_tags: List[tuple]) -> Dict[str, int]:
-        """
-        Extract part-of-speech patterns
-        
-        Args:
-            pos_tags (List[tuple]): List of (token, pos_tag) tuples
-            
-        Returns:
-            Dict[str, int]: POS pattern frequencies
-        """
-        patterns = []
-        
-        # Extract bigram patterns
-        for i in range(len(pos_tags) - 1):
-            pattern = f"{pos_tags[i][1]}_{pos_tags[i+1][1]}"
-            patterns.append(pattern)
-            
-        return dict(Counter(patterns))
-        
-    def extract_basic_features(self, text: str, tokens: Optional[List[str]] = None) -> Dict[str, Any]:
-        """
-        Extract basic features from Thai text
-        
-        Args:
-            text (str): Input text
-            tokens (Optional[List[str]]): List of tokens (if None, text is treated as a single token)
-            
-        Returns:
-            Dict[str, Any]: Basic features
-        """
-        if tokens is None:
-            tokens = [text]
-            
-        # Character type counts and ratios
-        char_counts = self._count_char_types(text)
-        char_ratios = self._calculate_char_ratios(char_counts)
-        
-        # Word frequencies
-        word_freq = self._count_word_frequencies(tokens)
-        
-        # Text statistics
-        text_stats = self._calculate_text_statistics(text, tokens)
-        
-        # Combine features
-        features = {
-            **char_counts,
-            **char_ratios,
-            'word_frequencies': word_freq,
-            **text_stats
-        }
-        
-        return features
-        
-    def extract_advanced_features(self, text: str, tokens: List[str], pos_tags: Optional[List[tuple]] = None, 
-                                document_freq: Optional[Dict[str, int]] = None, total_docs: int = 1) -> Dict[str, Any]:
-        """
-        Extract advanced features from Thai text
-        
-        Args:
-            text (str): Input text
-            tokens (List[str]): List of tokens
-            pos_tags (Optional[List[tuple]]): List of (token, pos_tag) tuples
-            document_freq (Optional[Dict[str, int]]): Document frequencies for TF-IDF
-            total_docs (int): Total number of documents for TF-IDF
-            
-        Returns:
-            Dict[str, Any]: Advanced features
-        """
-        # Get basic features
-        features = self.extract_basic_features(text, tokens)
-        
-        # Extract n-grams
-        bigrams = self._extract_ngrams(tokens, 2)
-        trigrams = self._extract_ngrams(tokens, 3)
-        
-        features['bigrams'] = dict(Counter(bigrams))
-        features['trigrams'] = dict(Counter(trigrams))
-        
-        # Calculate TF-IDF if document frequencies are provided
-        if document_freq is not None:
-            features['tf_idf'] = self._calculate_tf_idf(tokens, document_freq, total_docs)
-            
-        # Extract POS patterns if POS tags are provided
-        if pos_tags is not None:
-            features['pos_patterns'] = self._extract_pos_patterns(pos_tags)
-            
-        # Common word ratio
-        common_word_count = sum(1 for token in tokens if token in self.common_words)
-        features['common_word_ratio'] = common_word_count / len(tokens) if tokens else 0
-        
-        return features
-        
-    def create_document_vector(self, features: Dict[str, Any], vector_size: int = 100) -> List[float]:
-        """
-        Create a fixed-size vector from features (simplified)
-        
-        Args:
-            features (Dict[str, Any]): Features dictionary
-            vector_size (int): Size of the output vector
-            
-        Returns:
-            List[float]: Document vector
-        """
-        # This is a simplified implementation
-        # In a real system, use proper dimensionality reduction or embedding techniques
-        
-        # Extract numeric features
-        numeric_features = []
-        
-        # Add character counts and ratios
-        for key, value in features.items():
-            if isinstance(value, (int, float)) and key != 'total_chars':
-                numeric_features.append(value)
-                
-        # Add word frequency statistics
-        if 'word_frequencies' in features:
-            word_freq = features['word_frequencies']
-            if word_freq:
-                numeric_features.append(len(word_freq))  # Vocabulary size
-                numeric_features.append(sum(word_freq.values()) / len(word_freq))  # Average frequency
-                numeric_features.append(max(word_freq.values()))  # Max frequency
-                
-        # Add TF-IDF statistics if available
-        if 'tf_idf' in features and features['tf_idf']:
-            tf_idf = features['tf_idf']
-            numeric_features.append(sum(tf_idf.values()) / len(tf_idf))  # Average TF-IDF
-            numeric_features.append(max(tf_idf.values()))  # Max TF-IDF
-            
-        # Pad or truncate to vector_size
-        if len(numeric_features) > vector_size:
-            return numeric_features[:vector_size]
+        # Get hidden states
+        if layers is None:
+            # Use last layer by default
+            hidden_states = outputs.last_hidden_state
         else:
-            return numeric_features + [0.0] * (vector_size - len(numeric_features))
-
-def extract_features(text: str, tokens: Optional[List[str]] = None) -> Dict[str, Any]:
-    """
-    Extract features from Thai text
-    
-    Args:
-        text (str): Input text
-        tokens (Optional[List[str]]): List of tokens (if None, text is treated as a single token)
+            # Combine specified layers
+            hidden_states = torch.stack([
+                outputs.hidden_states[layer]
+                for layer in layers
+            ]).mean(dim=0)
+            
+        # Apply pooling
+        if self.pooling_strategy == "mean":
+            # Mean pooling
+            attention_mask = encoded['attention_mask'].unsqueeze(-1)
+            embeddings = (hidden_states * attention_mask).sum(1) / attention_mask.sum(1)
+        elif self.pooling_strategy == "cls":
+            # Use [CLS] token
+            embeddings = hidden_states[:, 0]
+        else:
+            raise ValueError(f"Unknown pooling strategy: {self.pooling_strategy}")
+            
+        return embeddings
         
-    Returns:
-        Dict[str, Any]: Extracted features
-    """
-    extractor = ThaiFeatureExtractor()
-    return extractor.extract_basic_features(text, tokens)
-
-def extract_advanced_features(text: str, tokens: List[str], pos_tags: Optional[List[tuple]] = None) -> Dict[str, Any]:
-    """
-    Extract advanced features from Thai text
-    
-    Args:
-        text (str): Input text
-        tokens (List[str]): List of tokens
-        pos_tags (Optional[List[tuple]]): List of (token, pos_tag) tuples
+    def _get_static_embeddings(
+        self,
+        texts: Union[str, List[str]]
+    ) -> torch.Tensor:
+        """Get static embeddings from sentence transformer
         
-    Returns:
-        Dict[str, Any]: Advanced features
-    """
-    extractor = ThaiFeatureExtractor()
-    return extractor.extract_advanced_features(text, tokens, pos_tags)
-
-def create_document_vector(features: Dict[str, Any], vector_size: int = 100) -> List[float]:
-    """
-    Create a fixed-size vector from features
-    
-    Args:
-        features (Dict[str, Any]): Features dictionary
-        vector_size (int): Size of the output vector
+        Args:
+            texts: Input text or list of texts
+            
+        Returns:
+            Tensor of embeddings
+        """
+        if isinstance(texts, str):
+            texts = [texts]
+            
+        return self.static_model.encode(
+            texts,
+            convert_to_tensor=True
+        )
         
-    Returns:
-        List[float]: Document vector
-    """
-    extractor = ThaiFeatureExtractor()
-    return extractor.create_document_vector(features, vector_size) 
+    def _get_linguistic_features(
+        self,
+        text: str
+    ) -> Dict[str, float]:
+        """Extract linguistic features from text
+        
+        Args:
+            text: Input text
+            
+        Returns:
+            Dictionary of linguistic features
+        """
+        # Tokenize
+        tokens = word_tokenize(text)
+        pos_tags = pos_tag(text)
+        
+        # Basic statistics
+        features = {
+            'num_tokens': len(tokens),
+            'avg_token_length': np.mean([len(t) for t in tokens]),
+            'num_sentences': len(text.split('.')),
+            'num_thai_chars': sum(1 for c in text if c in thai_characters),
+            'num_thai_digits': sum(1 for c in text if c in thai_digits),
+            'num_spaces': text.count(' '),
+        }
+        
+        # POS tag distribution
+        pos_counts = {}
+        for _, pos in pos_tags:
+            pos_counts[pos] = pos_counts.get(pos, 0) + 1
+            
+        for pos, count in pos_counts.items():
+            features[f'pos_{pos}'] = count / len(pos_tags)
+            
+        return features
+        
+    def _get_domain_features(
+        self,
+        text: str
+    ) -> Dict[str, Any]:
+        """Extract domain-specific features
+        
+        Args:
+            text: Input text
+            
+        Returns:
+            Dictionary of domain features
+        """
+        features = {}
+        
+        for feature in self.domain_features:
+            if feature == "sentiment":
+                # Add sentiment analysis
+                from pythainlp.sentiment import sentiment
+                features['sentiment_score'] = sentiment(text)
+                
+            elif feature == "readability":
+                # Add readability metrics
+                tokens = word_tokenize(text)
+                features.update({
+                    'readability_score': len(set(tokens)) / len(tokens),
+                    'avg_word_length': np.mean([len(t) for t in tokens])
+                })
+                
+            elif feature == "formality":
+                # Add formality detection
+                formal_markers = ['ครับ', 'ค่ะ', 'ท่าน', 'กระผม']
+                informal_markers = ['จ้า', 'ครัช', 'เด้อ', 'จ้ะ']
+                
+                formal_count = sum(text.count(m) for m in formal_markers)
+                informal_count = sum(text.count(m) for m in informal_markers)
+                
+                total = formal_count + informal_count
+                if total > 0:
+                    features['formality_score'] = formal_count / total
+                else:
+                    features['formality_score'] = 0.5
+                    
+        return features
+        
+    def extract_features(
+        self,
+        texts: Union[str, List[str]],
+        include_embeddings: bool = True,
+        include_linguistic: bool = True,
+        include_domain: bool = True,
+        layers: Optional[List[int]] = None,
+        **kwargs
+    ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+        """Extract features from text
+        
+        Args:
+            texts: Input text or list of texts
+            include_embeddings: Whether to include embeddings
+            include_linguistic: Whether to include linguistic features
+            include_domain: Whether to include domain features
+            layers: List of layers to extract embeddings from
+            **kwargs: Additional arguments for feature extraction
+            
+        Returns:
+            Dictionary or list of dictionaries with extracted features
+        """
+        single_text = isinstance(texts, str)
+        if single_text:
+            texts = [texts]
+            
+        results = []
+        
+        for text in texts:
+            features = {'text': text}
+            
+            # Get embeddings
+            if include_embeddings:
+                if self.embedding_type in ["contextual", "both"]:
+                    features['contextual_embedding'] = self._get_contextual_embeddings(
+                        text,
+                        layers=layers
+                    )
+                    
+                if self.embedding_type in ["static", "both"]:
+                    features['static_embedding'] = self._get_static_embeddings(text)
+                    
+            # Get linguistic features
+            if include_linguistic:
+                features['linguistic'] = self._get_linguistic_features(text)
+                
+            # Get domain features
+            if include_domain and self.domain_features:
+                features['domain'] = self._get_domain_features(text)
+                
+            results.append(features)
+            
+        return results[0] if single_text else results
+        
+    def get_similarity(
+        self,
+        text1: str,
+        text2: str,
+        method: str = "cosine",
+        embedding_type: Optional[str] = None
+    ) -> float:
+        """Calculate similarity between two texts
+        
+        Args:
+            text1: First text
+            text2: Second text
+            method: Similarity method (cosine, euclidean, or dot)
+            embedding_type: Type of embeddings to use (contextual or static)
+            
+        Returns:
+            Similarity score
+        """
+        # Get embeddings
+        if embedding_type is None:
+            embedding_type = self.embedding_type
+            
+        if embedding_type == "contextual":
+            emb1 = self._get_contextual_embeddings(text1)
+            emb2 = self._get_contextual_embeddings(text2)
+        else:
+            emb1 = self._get_static_embeddings(text1)
+            emb2 = self._get_static_embeddings(text2)
+            
+        # Calculate similarity
+        if method == "cosine":
+            return torch.nn.functional.cosine_similarity(emb1, emb2).item()
+        elif method == "euclidean":
+            return -torch.norm(emb1 - emb2).item()
+        elif method == "dot":
+            return torch.dot(emb1.flatten(), emb2.flatten()).item()
+        else:
+            raise ValueError(f"Unknown similarity method: {method}")
+            
+    def get_most_similar(
+        self,
+        query: str,
+        candidates: List[str],
+        top_k: int = 5,
+        **kwargs
+    ) -> List[Dict[str, Any]]:
+        """Find most similar texts from candidates
+        
+        Args:
+            query: Query text
+            candidates: List of candidate texts
+            top_k: Number of results to return
+            **kwargs: Additional arguments for similarity calculation
+            
+        Returns:
+            List of dictionaries with text and similarity score
+        """
+        similarities = []
+        
+        for text in candidates:
+            score = self.get_similarity(query, text, **kwargs)
+            similarities.append({
+                'text': text,
+                'similarity': score
+            })
+            
+        # Sort by similarity
+        similarities.sort(key=lambda x: x['similarity'], reverse=True)
+        
+        return similarities[:top_k]
+        
+    def extract_keywords(
+        self,
+        text: str,
+        top_k: int = 10,
+        use_tfidf: bool = True
+    ) -> List[Dict[str, float]]:
+        """Extract keywords from text
+        
+        Args:
+            text: Input text
+            top_k: Number of keywords to extract
+            use_tfidf: Whether to use TF-IDF scores
+            
+        Returns:
+            List of dictionaries with keyword and score
+        """
+        # Tokenize
+        tokens = word_tokenize(text)
+        
+        if use_tfidf:
+            # Fit TF-IDF
+            self.tfidf.fit([text])
+            
+            # Get feature names and scores
+            feature_names = self.tfidf.get_feature_names_out()
+            scores = self.tfidf.transform([text]).toarray()[0]
+            
+            # Create keyword-score pairs
+            keywords = [
+                {'keyword': feature_names[i], 'score': scores[i]}
+                for i in range(len(feature_names))
+            ]
+            
+        else:
+            # Use frequency
+            from collections import Counter
+            counts = Counter(tokens)
+            total = sum(counts.values())
+            
+            keywords = [
+                {'keyword': word, 'score': count / total}
+                for word, count in counts.items()
+            ]
+            
+        # Sort by score
+        keywords.sort(key=lambda x: x['score'], reverse=True)
+        
+        return keywords[:top_k] 
