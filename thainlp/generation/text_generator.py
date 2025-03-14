@@ -1,384 +1,332 @@
 """
-Thai Text Generation Module
+Advanced Text Generation for Thai Language
 """
 
-from typing import Dict, List, Union, Optional, Any
-import random
-import re
-from collections import defaultdict, Counter
+from typing import List, Dict, Union, Optional, Any
+import torch
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    pipeline,
+    PreTrainedModel,
+    PreTrainedTokenizer,
+    GPT2LMHeadModel,
+    GPT2Tokenizer
+)
+from pythainlp.tokenize import word_tokenize
+from ..core.transformers import TransformerBase
 
-class ThaiTextGenerator:
-    def __init__(self):
-        """Initialize ThaiTextGenerator"""
-        # Templates for different text types
-        self.templates = {
-            'greeting': [
-                'สวัสดี{time_suffix}{polite_suffix}',
-                'สวัสดี{time_suffix} คุณ{name}{polite_suffix}',
-                'สวัสดี{polite_suffix} ยินดีต้อนรับ{polite_suffix}',
-            ],
-            'farewell': [
-                'ลาก่อน{polite_suffix}',
-                'แล้วพบกันใหม่{polite_suffix}',
-                'ขอให้โชคดี{polite_suffix}',
-                'ขอบคุณ{polite_suffix} แล้วพบกันใหม่{polite_suffix}',
-            ],
-            'question': [
-                'คุณ{verb}อะไร{question_suffix}',
-                '{pronoun}{verb}อะไร{question_suffix}',
-                'ทำไม{pronoun}ถึง{verb}{question_suffix}',
-                'คุณ{verb}ที่ไหน{question_suffix}',
-                'เมื่อไหร่{pronoun}จะ{verb}{question_suffix}',
-            ],
-            'statement': [
-                '{pronoun}{verb}{object}{polite_suffix}',
-                '{pronoun}ไม่{verb}{object}{polite_suffix}',
-                '{pronoun}กำลัง{verb}{object}{polite_suffix}',
-                '{pronoun}จะ{verb}{object}{polite_suffix}',
-                '{pronoun}ได้{verb}{object}แล้ว{polite_suffix}',
-            ],
-            'opinion': [
-                '{pronoun}คิดว่า{statement}{polite_suffix}',
-                'ในความคิดของ{pronoun} {statement}{polite_suffix}',
-                '{pronoun}เห็นว่า{statement}{polite_suffix}',
-                '{pronoun}รู้สึกว่า{statement}{polite_suffix}',
-            ]
-        }
+class ThaiTextGenerator(TransformerBase):
+    """Advanced text generation for Thai language"""
+    
+    def __init__(
+        self,
+        model_name_or_path: Optional[str] = None,
+        max_length: int = 1024,
+        temperature: float = 0.7,
+        top_p: float = 0.9,
+        use_cuda: bool = True,
+        **kwargs
+    ):
+        """Initialize text generator
         
-        # Template variables
-        self.template_vars = {
-            'time_suffix': ['', 'ตอนเช้า', 'ตอนสาย', 'ตอนเที่ยง', 'ตอนบ่าย', 'ตอนเย็น', 'ตอนค่ำ'],
-            'polite_suffix': ['', 'ครับ', 'คะ', 'ค่ะ', 'นะครับ', 'นะคะ'],
-            'question_suffix': ['', 'ครับ', 'คะ', 'หรือ', 'หรือครับ', 'หรือคะ', 'หรือเปล่า'],
-            'pronoun': ['ฉัน', 'ผม', 'ดิฉัน', 'เขา', 'เธอ', 'พวกเรา', 'พวกเขา', 'คุณ'],
-            'verb': ['ชอบ', 'รัก', 'เกลียด', 'ต้องการ', 'อยาก', 'ไป', 'มา', 'กิน', 'ดื่ม', 'นอน', 'เล่น', 'ทำงาน', 'เรียน', 'อ่าน', 'เขียน', 'พูด', 'ฟัง', 'ดู'],
-            'object': ['', 'อาหาร', 'น้ำ', 'กาแฟ', 'หนังสือ', 'ทีวี', 'ภาพยนตร์', 'เพลง', 'เกม', 'กีฬา', 'การเดินทาง', 'การท่องเที่ยว', 'ธรรมชาติ', 'ทะเล', 'ภูเขา'],
-            'name': ['สมชาย', 'สมหญิง', 'วิชัย', 'มานี', 'สุดา', 'ประเสริฐ', 'กมลา', 'สมศักดิ์', 'ศิริพร', 'อนุชา'],
-            'statement': ['เรื่องนี้น่าสนใจ', 'เรื่องนี้สำคัญมาก', 'สิ่งนี้ดีมาก', 'สิ่งนี้ไม่ดีเลย', 'เรื่องนี้ยากมาก', 'เรื่องนี้ง่ายมาก', 'คนนี้เก่งมาก', 'คนนี้ไม่เก่งเลย']
-        }
+        Args:
+            model_name_or_path: Name or path of the model
+            max_length: Maximum sequence length
+            temperature: Sampling temperature
+            top_p: Nucleus sampling parameter
+            use_cuda: Whether to use GPU if available
+            **kwargs: Additional arguments for model initialization
+        """
+        if model_name_or_path is None:
+            model_name_or_path = "airesearch/wangchanberta-base-att-spm-uncased"
+            
+        self.max_length = max_length
+        self.temperature = temperature
+        self.top_p = top_p
         
-        # N-gram models
-        self.unigrams = Counter()
-        self.bigrams = defaultdict(Counter)
-        self.trigrams = defaultdict(lambda: defaultdict(Counter))
+        super().__init__(
+            model_name_or_path=model_name_or_path,
+            task_type="text-generation",
+            **kwargs
+        )
         
-        # Vocabulary for different parts of speech
-        self.vocabulary = {
-            'NOUN': ['บ้าน', 'รถ', 'คน', 'หมา', 'แมว', 'โต๊ะ', 'เก้าอี้', 'ต้นไม้', 'ดอกไม้', 'นก', 'ปลา', 'แม่น้ำ', 'ทะเล', 'ภูเขา', 'เมือง', 'ประเทศ', 'อาหาร', 'น้ำ', 'กาแฟ', 'ชา'],
-            'VERB': ['กิน', 'ดื่ม', 'นอน', 'วิ่ง', 'เดิน', 'พูด', 'ฟัง', 'อ่าน', 'เขียน', 'ดู', 'เล่น', 'ทำงาน', 'เรียน', 'สอน', 'ซื้อ', 'ขาย', 'ให้', 'รับ', 'ส่ง', 'ชอบ'],
-            'ADJ': ['ดี', 'เลว', 'สวย', 'น่าเกลียด', 'ใหญ่', 'เล็ก', 'สูง', 'ต่ำ', 'หนัก', 'เบา', 'ร้อน', 'เย็น', 'แข็ง', 'นุ่ม', 'เร็ว', 'ช้า', 'ใหม่', 'เก่า', 'แพง', 'ถูก'],
-            'ADV': ['มาก', 'น้อย', 'เร็ว', 'ช้า', 'ดี', 'แย่', 'บ่อย', 'นาน', 'ทันที', 'เสมอ', 'บางครั้ง', 'ไม่เคย', 'ค่อนข้าง', 'เกือบ', 'จริงๆ', 'แน่นอน', 'อาจจะ', 'คงจะ', 'น่าจะ', 'ควรจะ'],
-            'PRON': ['ฉัน', 'ผม', 'ดิฉัน', 'เขา', 'เธอ', 'มัน', 'พวกเรา', 'พวกเขา', 'คุณ', 'ท่าน', 'นั่น', 'นี่', 'โน่น', 'อันนี้', 'อันนั้น', 'ใคร', 'อะไร', 'ที่ไหน', 'เมื่อไร', 'อย่างไร'],
-            'PREP': ['ใน', 'นอก', 'บน', 'ล่าง', 'ข้างใน', 'ข้างนอก', 'ข้างบน', 'ข้างล่าง', 'ระหว่าง', 'รอบ', 'ผ่าน', 'ตาม', 'จาก', 'ถึง', 'สู่', 'กับ', 'โดย', 'ด้วย', 'สำหรับ', 'เพื่อ'],
-            'CONJ': ['และ', 'หรือ', 'แต่', 'เพราะ', 'เนื่องจาก', 'ดังนั้น', 'ถ้า', 'เมื่อ', 'ขณะที่', 'ในขณะที่', 'ก่อนที่', 'หลังจาก', 'นอกจาก', 'ส่วน', 'อย่างไรก็ตาม', 'อย่างไรก็ดี', 'ทั้งๆที่', 'แม้ว่า', 'ถึงแม้ว่า', 'เพื่อให้'],
-            'DET': ['นี้', 'นั้น', 'โน้น', 'เหล่านี้', 'เหล่านั้น', 'ทั้งหมด', 'ทุก', 'แต่ละ', 'บาง', 'หลาย', 'กี่', 'เท่าไร', 'เท่าไหร่', 'เท่าใด', 'ไหน', 'ใด', 'อะไร', 'ไหน', 'ใด', 'อะไร'],
-            'NUM': ['หนึ่ง', 'สอง', 'สาม', 'สี่', 'ห้า', 'หก', 'เจ็ด', 'แปด', 'เก้า', 'สิบ', 'ร้อย', 'พัน', 'หมื่น', 'แสน', 'ล้าน', 'ที่หนึ่ง', 'ที่สอง', 'ที่สาม', 'ครึ่ง', 'หนึ่งในสาม']
-        }
+        # Initialize generation pipeline
+        self.generation_pipeline = pipeline(
+            "text-generation",
+            model=self.model,
+            tokenizer=self.tokenizer,
+            device=0 if use_cuda and torch.cuda.is_available() else -1
+        )
         
-        # Common sentence patterns
-        self.sentence_patterns = [
-            ['PRON', 'VERB', 'NOUN'],
-            ['PRON', 'VERB', 'ADV'],
-            ['PRON', 'ADV', 'VERB', 'NOUN'],
-            ['NOUN', 'ADJ'],
-            ['NOUN', 'VERB', 'ADV'],
-            ['PRON', 'VERB', 'PREP', 'NOUN'],
-            ['PRON', 'VERB', 'CONJ', 'PRON', 'VERB'],
-            ['DET', 'NOUN', 'ADJ'],
-            ['PRON', 'VERB', 'DET', 'NOUN'],
-            ['NOUN', 'DET', 'ADJ']
+    def _prepare_prompt(
+        self,
+        prompt: str,
+        style: Optional[str] = None,
+        topic: Optional[str] = None,
+        format_template: Optional[str] = None
+    ) -> str:
+        """Prepare prompt with control tokens and formatting
+        
+        Args:
+            prompt: Base prompt text
+            style: Writing style
+            topic: Topic or theme
+            format_template: Text format template
+            
+        Returns:
+            Formatted prompt
+        """
+        control_tokens = []
+        
+        if style:
+            control_tokens.append(f"<style={style}>")
+            
+        if topic:
+            control_tokens.append(f"<topic={topic}>")
+            
+        if format_template:
+            # Replace placeholders in template
+            formatted_prompt = format_template.replace("{prompt}", prompt)
+            prompt = formatted_prompt
+            
+        # Combine control tokens and prompt
+        if control_tokens:
+            prompt = ' '.join(control_tokens + [prompt])
+            
+        return prompt
+        
+    def _filter_generated_text(
+        self,
+        text: str,
+        min_length: Optional[int] = None,
+        max_length: Optional[int] = None,
+        remove_prompt: bool = True,
+        clean_special_tokens: bool = True
+    ) -> str:
+        """Filter and clean generated text
+        
+        Args:
+            text: Generated text
+            min_length: Minimum length in words
+            max_length: Maximum length in words
+            remove_prompt: Whether to remove the prompt
+            clean_special_tokens: Whether to clean special tokens
+            
+        Returns:
+            Filtered text
+        """
+        # Remove prompt if needed
+        if remove_prompt and "<|endoftext|>" in text:
+            text = text.split("<|endoftext|>")[1]
+            
+        # Clean special tokens
+        if clean_special_tokens:
+            special_tokens = ["<style=", "<topic=", "<|endoftext|>"]
+            for token in special_tokens:
+                text = text.replace(token, "")
+                
+        # Apply length constraints
+        tokens = word_tokenize(text)
+        
+        if min_length and len(tokens) < min_length:
+            return ""
+            
+        if max_length and len(tokens) > max_length:
+            text = ' '.join(tokens[:max_length])
+            
+        return text.strip()
+        
+    def generate(
+        self,
+        prompt: str,
+        max_length: Optional[int] = None,
+        min_length: Optional[int] = None,
+        num_return_sequences: int = 1,
+        style: Optional[str] = None,
+        topic: Optional[str] = None,
+        format_template: Optional[str] = None,
+        **kwargs
+    ) -> Union[str, List[str]]:
+        """Generate text from prompt
+        
+        Args:
+            prompt: Input prompt
+            max_length: Maximum length of generated text
+            min_length: Minimum length of generated text
+            num_return_sequences: Number of sequences to generate
+            style: Writing style
+            topic: Topic or theme
+            format_template: Text format template
+            **kwargs: Additional arguments for generation
+            
+        Returns:
+            Generated text or list of texts
+        """
+        # Prepare prompt
+        formatted_prompt = self._prepare_prompt(
+            prompt,
+            style=style,
+            topic=topic,
+            format_template=format_template
+        )
+        
+        # Generate text
+        outputs = self.generation_pipeline(
+            formatted_prompt,
+            max_length=max_length or self.max_length,
+            min_length=min_length,
+            num_return_sequences=num_return_sequences,
+            temperature=self.temperature,
+            top_p=self.top_p,
+            do_sample=True,
+            **kwargs
+        )
+        
+        # Process outputs
+        generated_texts = [
+            self._filter_generated_text(
+                output['generated_text'],
+                min_length=min_length,
+                max_length=max_length,
+                remove_prompt=True
+            )
+            for output in outputs
         ]
         
-    def _fill_template(self, template_type: str) -> str:
-        """
-        Fill a template with random variables
+        return generated_texts[0] if num_return_sequences == 1 else generated_texts
+        
+    def generate_with_keywords(
+        self,
+        keywords: List[str],
+        max_length: Optional[int] = None,
+        style: Optional[str] = None,
+        **kwargs
+    ) -> str:
+        """Generate text incorporating given keywords
         
         Args:
-            template_type (str): Type of template to fill
+            keywords: List of keywords to include
+            max_length: Maximum length of generated text
+            style: Writing style
+            **kwargs: Additional arguments for generation
             
         Returns:
-            str: Filled template
+            Generated text
         """
-        if template_type not in self.templates:
-            template_type = random.choice(list(self.templates.keys()))
-            
-        # Select a random template
-        template = random.choice(self.templates[template_type])
+        # Create prompt with keywords
+        prompt = f"สร้างข้อความที่มีคำสำคัญต่อไปนี้: {', '.join(keywords)}\n\nข้อความ:"
         
-        # Fill in template variables
-        for var_name, var_values in self.template_vars.items():
-            if '{' + var_name + '}' in template:
-                template = template.replace('{' + var_name + '}', random.choice(var_values))
-                
-        return template
-        
-    def _train_ngram_model(self, texts: List[str]) -> None:
-        """
-        Train n-gram models from texts
-        
-        Args:
-            texts (List[str]): List of training texts
-        """
-        for text in texts:
-            # Tokenize (simplified)
-            tokens = text.split()
-            
-            # Update unigrams
-            self.unigrams.update(tokens)
-            
-            # Update bigrams
-            for i in range(len(tokens) - 1):
-                self.bigrams[tokens[i]][tokens[i+1]] += 1
-                
-            # Update trigrams
-            for i in range(len(tokens) - 2):
-                self.trigrams[tokens[i]][tokens[i+1]][tokens[i+2]] += 1
-                
-    def _generate_from_ngram(self, length: int = 10, start_word: Optional[str] = None) -> str:
-        """
-        Generate text using n-gram model
-        
-        Args:
-            length (int): Length of text to generate
-            start_word (Optional[str]): Word to start with
-            
-        Returns:
-            str: Generated text
-        """
-        if not self.unigrams:
-            return "ไม่มีข้อมูลสำหรับการสร้างข้อความ"
-            
-        # Start with a random word if not specified
-        if start_word is None or start_word not in self.unigrams:
-            start_word = random.choices(
-                list(self.unigrams.keys()),
-                weights=[count for count in self.unigrams.values()],
-                k=1
-            )[0]
-            
         # Generate text
-        text = [start_word]
-        current_word = start_word
+        text = self.generate(
+            prompt,
+            max_length=max_length,
+            style=style,
+            **kwargs
+        )
         
-        for _ in range(length - 1):
-            # Try to use trigram
-            if len(text) >= 2 and text[-2] in self.trigrams and text[-1] in self.trigrams[text[-2]]:
-                next_word_candidates = self.trigrams[text[-2]][text[-1]]
-                if next_word_candidates:
-                    next_word = random.choices(
-                        list(next_word_candidates.keys()),
-                        weights=[count for count in next_word_candidates.values()],
-                        k=1
-                    )[0]
-                    text.append(next_word)
-                    continue
-                    
-            # Try to use bigram
-            if current_word in self.bigrams:
-                next_word_candidates = self.bigrams[current_word]
-                if next_word_candidates:
-                    next_word = random.choices(
-                        list(next_word_candidates.keys()),
-                        weights=[count for count in next_word_candidates.values()],
-                        k=1
-                    )[0]
-                    text.append(next_word)
-                    current_word = next_word
-                    continue
-                    
-            # Fallback to unigram
-            next_word = random.choices(
-                list(self.unigrams.keys()),
-                weights=[count for count in self.unigrams.values()],
-                k=1
-            )[0]
-            text.append(next_word)
-            current_word = next_word
-            
-        return ' '.join(text)
+        return text
         
-    def _generate_from_pattern(self, pattern: Optional[List[str]] = None) -> str:
-        """
-        Generate text using a part-of-speech pattern
+    def continue_text(
+        self,
+        text: str,
+        min_new_length: int = 50,
+        max_new_length: Optional[int] = None,
+        **kwargs
+    ) -> str:
+        """Continue existing text
         
         Args:
-            pattern (Optional[List[str]]): POS pattern to use
+            text: Existing text to continue
+            min_new_length: Minimum length of new text
+            max_new_length: Maximum length of new text
+            **kwargs: Additional arguments for generation
             
         Returns:
-            str: Generated text
+            Continued text
         """
-        if pattern is None:
-            pattern = random.choice(self.sentence_patterns)
-            
-        # Generate words based on pattern
-        words = []
-        for pos in pattern:
-            if pos in self.vocabulary and self.vocabulary[pos]:
-                words.append(random.choice(self.vocabulary[pos]))
-            else:
-                words.append("[" + pos + "]")
-                
-        return ''.join(words)
+        # Generate continuation
+        continuation = self.generate(
+            text,
+            min_length=len(word_tokenize(text)) + min_new_length,
+            max_length=len(word_tokenize(text)) + (max_new_length or self.max_length),
+            **kwargs
+        )
         
-    def generate_template_text(self, template_type: Optional[str] = None) -> str:
-        """
-        Generate text using templates
+        # Ensure smooth continuation
+        if not continuation.startswith(text):
+            continuation = text + " " + continuation
+            
+        return continuation
+        
+    def generate_with_control(
+        self,
+        prompt: str,
+        control_codes: Dict[str, Any],
+        **kwargs
+    ) -> str:
+        """Generate text with fine-grained control
         
         Args:
-            template_type (Optional[str]): Type of template to use
+            prompt: Input prompt
+            control_codes: Dictionary of control parameters
+            **kwargs: Additional arguments for generation
             
         Returns:
-            str: Generated text
+            Generated text
         """
-        if template_type is None:
-            template_type = random.choice(list(self.templates.keys()))
-            
-        return self._fill_template(template_type)
+        # Process control codes
+        style = control_codes.get('style')
+        topic = control_codes.get('topic')
+        format_template = control_codes.get('format')
         
-    def generate_ngram_text(self, texts: List[str], length: int = 10, start_word: Optional[str] = None) -> str:
-        """
-        Generate text using n-gram model
+        # Additional control parameters
+        length = control_codes.get('length', self.max_length)
+        temperature = control_codes.get('temperature', self.temperature)
+        top_p = control_codes.get('top_p', self.top_p)
+        
+        # Generate text with controls
+        text = self.generate(
+            prompt,
+            max_length=length,
+            style=style,
+            topic=topic,
+            format_template=format_template,
+            temperature=temperature,
+            top_p=top_p,
+            **kwargs
+        )
+        
+        return text
+        
+    def batch_generate(
+        self,
+        prompts: List[str],
+        batch_size: int = 8,
+        **kwargs
+    ) -> List[str]:
+        """Generate text for multiple prompts
         
         Args:
-            texts (List[str]): Training texts
-            length (int): Length of text to generate
-            start_word (Optional[str]): Word to start with
+            prompts: List of input prompts
+            batch_size: Batch size for generation
+            **kwargs: Additional arguments for generation
             
         Returns:
-            str: Generated text
+            List of generated texts
         """
-        # Train model if needed
-        if not self.unigrams:
-            self._train_ngram_model(texts)
+        results = []
+        
+        # Process in batches
+        for i in range(0, len(prompts), batch_size):
+            batch_prompts = prompts[i:i + batch_size]
             
-        return self._generate_from_ngram(length, start_word)
-        
-    def generate_pattern_text(self, pattern: Optional[List[str]] = None) -> str:
-        """
-        Generate text using a part-of-speech pattern
-        
-        Args:
-            pattern (Optional[List[str]]): POS pattern to use
+            # Generate for batch
+            batch_outputs = [
+                self.generate(prompt, **kwargs)
+                for prompt in batch_prompts
+            ]
             
-        Returns:
-            str: Generated text
-        """
-        return self._generate_from_pattern(pattern)
-        
-    def generate_text(self, method: str = 'template', **kwargs) -> str:
-        """
-        Generate text using specified method
-        
-        Args:
-            method (str): Generation method ('template', 'ngram', or 'pattern')
-            **kwargs: Additional arguments for the specific method
+            results.extend(batch_outputs)
             
-        Returns:
-            str: Generated text
-        """
-        if method == 'template':
-            return self.generate_template_text(kwargs.get('template_type'))
-        elif method == 'ngram':
-            return self.generate_ngram_text(
-                kwargs.get('texts', []),
-                kwargs.get('length', 10),
-                kwargs.get('start_word')
-            )
-        elif method == 'pattern':
-            return self.generate_pattern_text(kwargs.get('pattern'))
-        else:
-            return "ไม่รู้จักวิธีการสร้างข้อความ: " + method
-            
-    def generate_paragraph(self, num_sentences: int = 3, method: str = 'template') -> str:
-        """
-        Generate a paragraph with multiple sentences
-        
-        Args:
-            num_sentences (int): Number of sentences to generate
-            method (str): Generation method
-            
-        Returns:
-            str: Generated paragraph
-        """
-        sentences = []
-        for _ in range(num_sentences):
-            if method == 'template':
-                sentences.append(self.generate_template_text())
-            elif method == 'pattern':
-                sentences.append(self.generate_pattern_text())
-            else:
-                # Default to template
-                sentences.append(self.generate_template_text())
-                
-        return ' '.join(sentences)
-        
-    def complete_text(self, prefix: str, length: int = 5, method: str = 'template') -> str:
-        """
-        Complete text given a prefix
-        
-        Args:
-            prefix (str): Text prefix
-            length (int): Number of additional words/sentences to generate
-            method (str): Generation method
-            
-        Returns:
-            str: Completed text
-        """
-        if method == 'ngram' and self.unigrams:
-            # Get the last word of the prefix
-            words = prefix.split()
-            if words:
-                last_word = words[-1]
-                completion = self._generate_from_ngram(length, last_word)
-                return prefix + ' ' + ' '.join(completion.split()[1:])  # Avoid repeating the last word
-        
-        # Default to template-based completion
-        if random.random() < 0.5:
-            # Complete with a statement
-            completion = self.generate_template_text('statement')
-        else:
-            # Complete with a question
-            completion = self.generate_template_text('question')
-            
-        return prefix + ' ' + completion
-
-def generate_text(method: str = 'template', **kwargs) -> str:
-    """
-    Generate Thai text using specified method
-    
-    Args:
-        method (str): Generation method ('template', 'ngram', or 'pattern')
-        **kwargs: Additional arguments for the specific method
-        
-    Returns:
-        str: Generated text
-    """
-    generator = ThaiTextGenerator()
-    return generator.generate_text(method, **kwargs)
-
-def generate_paragraph(num_sentences: int = 3) -> str:
-    """
-    Generate a paragraph with multiple sentences
-    
-    Args:
-        num_sentences (int): Number of sentences to generate
-        
-    Returns:
-        str: Generated paragraph
-    """
-    generator = ThaiTextGenerator()
-    return generator.generate_paragraph(num_sentences)
-
-def complete_text(prefix: str, length: int = 5) -> str:
-    """
-    Complete text given a prefix
-    
-    Args:
-        prefix (str): Text prefix
-        length (int): Number of additional words/sentences to generate
-        
-    Returns:
-        str: Completed text
-    """
-    generator = ThaiTextGenerator()
-    return generator.complete_text(prefix, length) 
+        return results 
