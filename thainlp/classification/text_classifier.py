@@ -1,261 +1,225 @@
 """
-Text Classification for Thai Text
+Text Classification for Thai Text using Transformer models
 """
 
-from typing import List, Dict, Tuple, Union, Optional
-import numpy as np
-from collections import Counter
+from typing import List, Dict, Union, Optional
+import torch
+import torch.nn.functional as F
+from ..core.transformers import TransformerBase
 
-class ThaiTextClassifier:
-    def __init__(self):
-        """Initialize ThaiTextClassifier"""
-        # Predefined categories for common classification tasks
-        self.categories = {
-            'sentiment': ['positive', 'neutral', 'negative'],
-            'topic': ['politics', 'sports', 'entertainment', 'technology', 'business', 'health'],
-            'spam': ['spam', 'not_spam'],
-            'intent': ['question', 'statement', 'command', 'request']
-        }
-        
-        # Simple keyword-based classification
-        self.keywords = {
-            'sentiment': {
-                'positive': [
-                    'ดี', 'สวย', 'เยี่ยม', 'ยอดเยี่ยม', 'สุดยอด', 'ชอบ', 'รัก', 'ประทับใจ',
-                    'พอใจ', 'สนุก', 'สุข', 'สบาย', 'อร่อย', 'น่ารัก', 'เก่ง'
-                ],
-                'negative': [
-                    'แย่', 'ไม่ดี', 'เลว', 'แห้ว', 'เสีย', 'เสียใจ', 'ผิดหวัง', 'โกรธ',
-                    'เกลียด', 'น่าเบื่อ', 'น่ารำคาญ', 'น่ากลัว', 'กลัว', 'เจ็บ', 'ปวด'
-                ]
-            },
-            'topic': {
-                'politics': [
-                    'รัฐบาล', 'นายกรัฐมนตรี', 'รัฐมนตรี', 'การเมือง', 'พรรค', 'เลือกตั้ง',
-                    'ประชาธิปไตย', 'นโยบาย', 'กฎหมาย', 'รัฐสภา', 'ส.ส.', 'ส.ว.'
-                ],
-                'sports': [
-                    'กีฬา', 'ฟุตบอล', 'บอล', 'บาสเกตบอล', 'วอลเลย์บอล', 'เทนนิส', 'กอล์ฟ',
-                    'แข่งขัน', 'นักกีฬา', 'โอลิมปิก', 'เหรียญ', 'ชนะ', 'แพ้', 'เสมอ'
-                ],
-                'entertainment': [
-                    'ดารา', 'นักแสดง', 'นักร้อง', 'เพลง', 'ภาพยนตร์', 'หนัง', 'ละคร', 'ซีรีส์',
-                    'คอนเสิร์ต', 'บันเทิง', 'ศิลปิน', 'อัลบั้ม', 'เพลง', 'ฮิต'
-                ],
-                'technology': [
-                    'เทคโนโลยี', 'คอมพิวเตอร์', 'โทรศัพท์', 'มือถือ', 'แอพ', 'แอปพลิเคชัน',
-                    'อินเทอร์เน็ต', 'ดิจิทัล', 'ซอฟต์แวร์', 'ฮาร์ดแวร์', 'โค้ด', 'โปรแกรม'
-                ],
-                'business': [
-                    'ธุรกิจ', 'การเงิน', 'เศรษฐกิจ', 'ตลาด', 'หุ้น', 'บริษัท', 'ลงทุน',
-                    'กำไร', 'ขาดทุน', 'ราคา', 'ต้นทุน', 'รายได้', 'ค่าใช้จ่าย', 'ภาษี'
-                ],
-                'health': [
-                    'สุขภาพ', 'โรค', 'แพทย์', 'หมอ', 'โรงพยาบาล', 'ยา', 'รักษา', 'ป่วย',
-                    'อาการ', 'ผู้ป่วย', 'วัคซีน', 'ไวรัส', 'เชื้อ', 'สุขภาพจิต', 'ออกกำลังกาย'
-                ]
-            },
-            'spam': {
-                'spam': [
-                    'ฟรี', 'โปรโมชั่น', 'ลด', 'แลก', 'แจก', 'ด่วน', 'พิเศษ', 'โอกาสสุดท้าย',
-                    'รวย', 'เงิน', 'กำไร', 'ลงทุน', 'รับประกัน', 'ไม่ต้องลงทุน', 'รายได้'
-                ]
-            },
-            'intent': {
-                'question': [
-                    'ไหม', 'หรือไม่', 'หรือเปล่า', 'ใช่ไหม', 'ทำไม', 'อย่างไร', 'เมื่อไร',
-                    'ที่ไหน', 'อะไร', 'ใคร', 'กี่', 'เท่าไร', '?', 'เหรอ', 'หรอ'
-                ],
-                'command': [
-                    'จง', 'ต้อง', 'ควร', 'ให้', 'ทำ', 'อย่า', 'ห้าม', 'กรุณา', 'โปรด',
-                    'ช่วย', 'เชิญ', 'เร่ง', 'รีบ', '!'
-                ],
-                'request': [
-                    'ขอ', 'อยาก', 'ต้องการ', 'ช่วย', 'กรุณา', 'โปรด', 'รบกวน', 'ขอร้อง',
-                    'ขอความกรุณา', 'ขอบคุณ'
-                ]
-            }
-        }
-        
-        # Feature weights for each category
-        self.weights = {
-            'sentiment': {'keyword': 0.7, 'length': 0.1, 'punctuation': 0.2},
-            'topic': {'keyword': 0.9, 'length': 0.05, 'punctuation': 0.05},
-            'spam': {'keyword': 0.6, 'length': 0.2, 'punctuation': 0.2},
-            'intent': {'keyword': 0.5, 'length': 0.2, 'punctuation': 0.3}
-        }
-        
-    def _count_keywords(self, text: str, category_type: str) -> Dict[str, int]:
-        """
-        Count keywords for each class in the category
+class ThaiTextClassifier(TransformerBase):
+    """Text classifier for Thai text using transformer models"""
+    
+    def __init__(
+        self,
+        model_name_or_path: Optional[str] = None,
+        num_labels: Optional[int] = None,
+        **kwargs
+    ):
+        """Initialize text classifier
         
         Args:
-            text (str): Input text
-            category_type (str): Category type (sentiment, topic, etc.)
+            model_name_or_path: Name or path of the model
+            num_labels: Number of labels for classification
+            **kwargs: Additional arguments for model initialization
+        """
+        if model_name_or_path is None:
+            model_name_or_path = self.get_default_model()
             
-        Returns:
-            Dict[str, int]: Counts of keywords for each class
-        """
-        words = text.lower().split()
-        counts = {cls: 0 for cls in self.categories[category_type]}
+        super().__init__(
+            model_name_or_path=model_name_or_path,
+            task_type="text-classification",
+            num_labels=num_labels,
+            **kwargs
+        )
         
-        for cls, keywords in self.keywords.get(category_type, {}).items():
-            for word in words:
-                if word in keywords:
-                    counts[cls] = counts.get(cls, 0) + 1
-                    
-        return counts
-        
-    def _extract_features(self, text: str) -> Dict[str, float]:
-        """
-        Extract features from text
+    @staticmethod
+    def get_default_model() -> str:
+        """Get default model for Thai text classification"""
+        return "airesearch/wangchanberta-base-att-spm-uncased"
+    
+    def classify(
+        self,
+        texts: Union[str, List[str]],
+        labels: Optional[List[str]] = None,
+        **kwargs
+    ) -> List[Dict[str, float]]:
+        """Classify text into predefined categories
         
         Args:
-            text (str): Input text
+            texts: Input text or list of texts
+            labels: Optional list of label names
+            **kwargs: Additional arguments for encoding
             
         Returns:
-            Dict[str, float]: Features
+            List of dictionaries containing classification probabilities
         """
-        features = {}
+        # Encode texts
+        inputs = self.encode(texts, **kwargs)
         
-        # Text length
-        features['length'] = len(text)
-        
-        # Punctuation count
-        features['punctuation'] = sum(1 for c in text if c in '.,!?;:')
-        
-        # Uppercase ratio (for non-Thai text)
-        if any(c.isalpha() and not ('\u0E00' <= c <= '\u0E7F') for c in text):
-            uppercase_chars = sum(1 for c in text if c.isupper())
-            total_chars = sum(1 for c in text if c.isalpha())
-            features['uppercase_ratio'] = uppercase_chars / total_chars if total_chars > 0 else 0
+        # Get model predictions
+        with torch.no_grad():
+            outputs = self.model(**inputs)
+            probs = F.softmax(outputs.logits, dim=-1)
             
-        return features
-        
-    def classify(self, text: str, category_type: str = 'sentiment') -> Tuple[str, Dict[str, float]]:
-        """
-        Classify text into predefined categories
+        # Convert to list of dictionaries
+        results = []
+        for prob in probs:
+            if labels:
+                result = {label: float(p) for label, p in zip(labels, prob)}
+            else:
+                result = {str(i): float(p) for i, p in enumerate(prob)}
+            results.append(result)
+            
+        return results[0] if isinstance(texts, str) else results
+    
+    def train(
+        self,
+        train_texts: List[str],
+        train_labels: List[Union[int, str]],
+        validation_texts: Optional[List[str]] = None,
+        validation_labels: Optional[List[Union[int, str]]] = None,
+        batch_size: int = 16,
+        num_epochs: int = 3,
+        learning_rate: float = 2e-5,
+        max_length: int = 512,
+        **kwargs
+    ):
+        """Fine-tune the model on custom data
         
         Args:
-            text (str): Input text
-            category_type (str): Category type (sentiment, topic, spam, intent)
-            
-        Returns:
-            Tuple[str, Dict[str, float]]: (predicted class, confidence scores)
+            train_texts: Training texts
+            train_labels: Training labels
+            validation_texts: Validation texts
+            validation_labels: Validation labels
+            batch_size: Training batch size
+            num_epochs: Number of training epochs
+            learning_rate: Learning rate
+            max_length: Maximum sequence length
+            **kwargs: Additional training arguments
         """
-        if category_type not in self.categories:
-            raise ValueError(f"Category type '{category_type}' not supported. Available types: {list(self.categories.keys())}")
-            
-        # Count keywords
-        keyword_counts = self._count_keywords(text, category_type)
+        from torch.utils.data import DataLoader, TensorDataset
+        from torch.optim import AdamW
+        from tqdm.auto import tqdm
         
-        # Extract other features
-        features = self._extract_features(text)
+        # Prepare training data
+        train_encodings = self.encode(train_texts, max_length=max_length)
+        train_labels = torch.tensor(train_labels)
+        train_dataset = TensorDataset(
+            train_encodings["input_ids"],
+            train_encodings["attention_mask"],
+            train_labels
+        )
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         
-        # Calculate scores
-        scores = {}
-        for cls in self.categories[category_type]:
-            # Keyword score
-            keyword_score = keyword_counts.get(cls, 0)
-            
-            # Length score (normalized)
-            length_score = 0
-            if category_type == 'spam' and features['length'] > 100:
-                length_score = 0.5  # Longer texts are more likely to be spam
-            elif category_type == 'intent':
-                if cls == 'question' and features['length'] < 50:
-                    length_score = 0.3  # Questions tend to be shorter
-                elif cls == 'command' and features['length'] < 30:
-                    length_score = 0.3  # Commands tend to be shorter
-                    
-            # Punctuation score
-            punctuation_score = 0
-            if category_type == 'intent':
-                if cls == 'question' and '?' in text:
-                    punctuation_score = 0.8
-                elif cls == 'command' and '!' in text:
-                    punctuation_score = 0.8
-                    
-            # Combine scores with weights
-            weights = self.weights.get(category_type, {'keyword': 0.7, 'length': 0.15, 'punctuation': 0.15})
-            scores[cls] = (
-                keyword_score * weights['keyword'] +
-                length_score * weights['length'] +
-                punctuation_score * weights['punctuation']
+        # Prepare validation data if provided
+        if validation_texts and validation_labels:
+            val_encodings = self.encode(validation_texts, max_length=max_length)
+            val_labels = torch.tensor(validation_labels)
+            val_dataset = TensorDataset(
+                val_encodings["input_ids"],
+                val_encodings["attention_mask"],
+                val_labels
             )
-            
-        # Normalize scores
-        total_score = sum(scores.values())
-        if total_score > 0:
-            scores = {cls: score / total_score for cls, score in scores.items()}
-            
-        # Get predicted class
-        predicted_class = max(scores.items(), key=lambda x: x[1])[0]
+            val_loader = DataLoader(val_dataset, batch_size=batch_size)
         
-        return predicted_class, scores
+        # Prepare optimizer
+        optimizer = AdamW(self.model.parameters(), lr=learning_rate)
         
-    def zero_shot_classify(self, text: str, candidate_labels: List[str]) -> Tuple[List[str], List[float]]:
-        """
-        Zero-shot classification with custom labels
+        # Training loop
+        self.model.train()
+        for epoch in range(num_epochs):
+            total_loss = 0
+            progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}")
+            
+            for batch in progress_bar:
+                optimizer.zero_grad()
+                input_ids, attention_mask, labels = [b.to(self.device) for b in batch]
+                
+                outputs = self.model(
+                    input_ids=input_ids,
+                    attention_mask=attention_mask,
+                    labels=labels
+                )
+                
+                loss = outputs.loss
+                loss.backward()
+                optimizer.step()
+                
+                total_loss += loss.item()
+                progress_bar.set_postfix({"loss": total_loss / len(train_loader)})
+            
+            # Validation
+            if validation_texts and validation_labels:
+                self.model.eval()
+                val_loss = 0
+                correct = 0
+                total = 0
+                
+                with torch.no_grad():
+                    for batch in val_loader:
+                        input_ids, attention_mask, labels = [b.to(self.device) for b in batch]
+                        outputs = self.model(
+                            input_ids=input_ids,
+                            attention_mask=attention_mask,
+                            labels=labels
+                        )
+                        val_loss += outputs.loss.item()
+                        
+                        predictions = torch.argmax(outputs.logits, dim=-1)
+                        correct += (predictions == labels).sum().item()
+                        total += labels.size(0)
+                
+                val_loss = val_loss / len(val_loader)
+                accuracy = correct / total
+                print(f"Validation Loss: {val_loss:.4f}, Accuracy: {accuracy:.4f}")
+                
+                self.model.train()
+    
+    def zero_shot_classify(
+        self,
+        texts: Union[str, List[str]],
+        candidate_labels: List[str],
+        hypothesis_template: str = "นี่คือเรื่องเกี่ยวกับ{}",
+        multi_label: bool = False,
+        **kwargs
+    ) -> List[Dict[str, float]]:
+        """Zero-shot classification using natural language inference
         
         Args:
-            text (str): Input text
-            candidate_labels (List[str]): List of candidate labels
+            texts: Input text or list of texts
+            candidate_labels: List of possible labels
+            hypothesis_template: Template for hypothesis generation
+            multi_label: Whether to allow multiple labels
+            **kwargs: Additional arguments for encoding
             
         Returns:
-            Tuple[List[str], List[float]]: (sorted labels, scores)
+            List of dictionaries containing classification probabilities
         """
-        words = text.lower().split()
-        scores = {}
+        from transformers import pipeline
         
-        # Simple keyword matching for each label
-        for label in candidate_labels:
-            # Convert label to keywords (simple approach)
-            keywords = label.lower().split('_')
-            
-            # Count occurrences
-            count = 0
-            for keyword in keywords:
-                count += sum(1 for word in words if keyword in word)
-                
-            scores[label] = count
-            
-        # Normalize scores
-        total = sum(scores.values())
-        if total > 0:
-            scores = {label: score / total for label, score in scores.items()}
-            
-        # Sort by score
-        sorted_results = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-        sorted_labels = [label for label, _ in sorted_results]
-        sorted_scores = [score for _, score in sorted_results]
+        classifier = pipeline(
+            "zero-shot-classification",
+            model="airesearch/wangchanberta-base-att-spm-uncased",
+            device=0 if torch.cuda.is_available() else -1
+        )
         
-        return sorted_labels, sorted_scores
-
-def classify_text(text: str, category_type: str = 'sentiment') -> Tuple[str, Dict[str, float]]:
-    """
-    Classify text into predefined categories
-    
-    Args:
-        text (str): Input text
-        category_type (str): Category type (sentiment, topic, spam, intent)
+        results = classifier(
+            texts,
+            candidate_labels,
+            hypothesis_template=hypothesis_template,
+            multi_label=multi_label
+        )
         
-    Returns:
-        Tuple[str, Dict[str, float]]: (predicted class, confidence scores)
-    """
-    classifier = ThaiTextClassifier()
-    return classifier.classify(text, category_type)
-
-def zero_shot_classification(text: str, candidate_labels: List[str]) -> Tuple[List[str], List[float]]:
-    """
-    Zero-shot classification with custom labels
-    
-    Args:
-        text (str): Input text
-        candidate_labels (List[str]): List of candidate labels
-        
-    Returns:
-        Tuple[List[str], List[float]]: (sorted labels, scores)
-    """
-    classifier = ThaiTextClassifier()
-    return classifier.zero_shot_classify(text, candidate_labels) 
+        if isinstance(texts, str):
+            return {
+                "labels": results["labels"],
+                "scores": results["scores"]
+            }
+        return [
+            {
+                "labels": r["labels"],
+                "scores": r["scores"]
+            }
+            for r in results
+        ] 
