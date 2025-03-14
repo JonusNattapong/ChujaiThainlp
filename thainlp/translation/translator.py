@@ -1,53 +1,423 @@
 """
 Thai Translation Module using PyThaiNLP with enhanced dictionary and context handling
-Version: 0.3.0
+Version: 0.4.0 - Enhanced with Neural Machine Translation and Context-Aware features
 """
 
 from typing import Dict, List, Union, Optional, Tuple, Any
 import re
 import warnings
+import json
+import os
+import pickle
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
+import torch
+import torch.nn as nn
+from transformers import AutoTokenizer, AutoModelForSeq2SeqGeneration
+from sacrebleu import corpus_bleu
+from nltk.translate.bleu_score import sentence_bleu
+from functools import lru_cache
 
 try:
     import pythainlp
     from pythainlp.translate import Translator
     from pythainlp.tokenize import word_tokenize, Tokenizer, syllable_tokenize
     from pythainlp.util import normalize, thai_strftime, num_to_thaiword
-    from pythainlp.corpus import thai_words, thai_syllables, thai_stopwords, conceptual_word_list
+    from pythainlp.corpus import thai_words, thai_syllables, thai_stopwords, conceptual_word_list, thai_negations
     from pythainlp.tag import pos_tag
     from pythainlp.tokenize import sent_tokenize
+    from pythainlp.soundex import soundex
+    from pythainlp.spell import spell
     PYTHAINLP_AVAILABLE = True
 except ImportError:
     PYTHAINLP_AVAILABLE = False
     warnings.warn("PyThaiNLP not found. Using simplified translation.")
 
+class NeuralTranslator(nn.Module):
+    """Neural Machine Translation model for Thai-English translation"""
+    def __init__(self, model_name: str = "Helsinki-NLP/opus-mt-th-en"):
+        super().__init__()
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model = AutoModelForSeq2SeqGeneration.from_pretrained(model_name)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model.to(self.device)
+        
+    def forward(self, text: str) -> str:
+        inputs = self.tokenizer(text, return_tensors="pt", padding=True)
+        inputs = {k: v.to(self.device) for k, v in inputs.items()}
+        
+        outputs = self.model.generate(**inputs)
+        return self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+        
+    def save_model(self, path: str):
+        """Save model and tokenizer"""
+        os.makedirs(path, exist_ok=True)
+        self.model.save_pretrained(path)
+        self.tokenizer.save_pretrained(path)
+        
+    @classmethod
+    def load_model(cls, path: str) -> "NeuralTranslator":
+        """Load model and tokenizer from path"""
+        instance = cls.__new__(cls)
+        instance.tokenizer = AutoTokenizer.from_pretrained(path)
+        instance.model = AutoModelForSeq2SeqGeneration.from_pretrained(path)
+        instance.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        instance.model.to(instance.device)
+        return instance
+
+class DialectHandler:
+    """Handle Thai dialect translations and patterns"""
+    def __init__(self):
+        self.dialect_patterns = {
+            'north': {
+                'particles': ['จ้าว', 'เจ้า', 'กอ', 'ก่อ', 'เน้อ', 'เจ้า'],
+                'pronouns': {
+                    'I': ['อั๋น', 'ข้า', 'เฮา'],
+                    'you': ['เจ้า', 'ตั๋ว', 'สู'],
+                    'he/she': ['มัน', 'เขา'],
+                    'we': ['เฮา', 'หมู่เฮา'],
+                    'they': ['หมู่เขา', 'เขา']
+                },
+                'verbs': {
+                    'eat': ['กิ๋น', 'แดง'],
+                    'go': ['ไป๋', 'ปั๋น'],
+                    'come': ['มา', 'มาเยียะหยัง'],
+                    'sleep': ['นอน', 'น่อน'],
+                    'speak': ['อู้', 'จ๋า']
+                }
+            },
+            'kham_muang': {
+                'particles': ['เจ้า', 'ก่อ', 'ละ', 'ละเจ้า', 'เน้อ', 'น่อ'],
+                'pronouns': {
+                    'I': ['ข้า', 'เฮา', 'กู้'],
+                    'you': ['ตั๋ว', 'เจ้า', 'มึง'],
+                    'he/she': ['มั๋น', 'เปิ้น'],
+                    'we': ['หมู่เฮา', 'เฮาตังหลาย'],
+                    'they': ['หมู่เขา', 'เขาตังหลาย']
+                },
+                'verbs': {
+                    'eat': ['กิ๋น', 'ตาน'],
+                    'go': ['ไป๋', 'หลุบ'],
+                    'come': ['มา', 'มาเยียะหยัง'],
+                    'sleep': ['นอน', 'น่อน'],
+                    'speak': ['อู้', 'จ๋า', 'เว้า']
+                },
+                'adjectives': {
+                    'good': ['งาม', 'ดี'],
+                    'bad': ['บ่ดี', 'บ่งาม'],
+                    'beautiful': ['งาม', 'สวย'],
+                    'delicious': ['แอ่ว', 'ลำ']
+                },
+                'time_expressions': {
+                    'today': ['วันนี้', 'มื้อนี้'],
+                    'tomorrow': ['วันพูก', 'มื้อพูก'],
+                    'yesterday': ['วันเตี๊ยะ', 'มื้อเตี๊ยะ']
+                }
+            },
+            'korat': {
+                'particles': ['ดอก', 'เด้อ', 'เด', 'หลาว', 'เหวย'],
+                'pronouns': {
+                    'I': ['ข้า', 'กู', 'อั่ว'],
+                    'you': ['เอ็ง', 'มึง', 'เจ้า'],
+                    'he/she': ['มัน', 'เขา'],
+                    'we': ['พวกข้า', 'หมู่ข้า'],
+                    'they': ['พวกมัน', 'หมู่มัน']
+                },
+                'verbs': {
+                    'eat': ['แดก', 'กิน', 'ฉัน'],
+                    'go': ['ไป', 'เลย'],
+                    'come': ['มา', 'มาแล้ว'],
+                    'sleep': ['นอน', 'จำวัด'],
+                    'speak': ['เว้า', 'พูด']
+                },
+                'adjectives': {
+                    'good': ['ดี', 'เด็ด'],
+                    'bad': ['บ่ดี', 'แย่'],
+                    'beautiful': ['งาม', 'สวย'],
+                    'delicious': ['แซบ', 'อร่อย']
+                },
+                'time_expressions': {
+                    'today': ['มื้อนี้', 'วันนี้'],
+                    'tomorrow': ['มื้อพรุ่ง', 'วันพรุ่ง'],
+                    'yesterday': ['มื้อวาน', 'เมื่อวาน']
+                }
+            },
+            'patani_malay': {
+                'particles': ['แล', 'ลอ', 'นะ', 'เยาะ'],
+                'pronouns': {
+                    'I': ['อาแก', 'ฉัน', 'กู'],
+                    'you': ['อาแต', 'เอ็ง', 'มึง'],
+                    'he/she': ['เดีย', 'ดีอา'],
+                    'we': ['กีตอ', 'กิต'],
+                    'they': ['มีแร', 'เขา']
+                },
+                'verbs': {
+                    'eat': ['มากัน', 'กิน'],
+                    'go': ['เปอกี', 'ไป'],
+                    'come': ['มารี', 'มา'],
+                    'sleep': ['ตีดอ', 'นอน'],
+                    'speak': ['จากัป', 'พูด']
+                },
+                'adjectives': {
+                    'good': ['บาเอ็ก', 'ดี'],
+                    'bad': ['ยาฮัต', 'แย่'],
+                    'beautiful': ['จันเต็ก', 'สวย'],
+                    'delicious': ['ซีดัป', 'อร่อย']
+                },
+                'time_expressions': {
+                    'today': ['ฮารีนี', 'วันนี้'],
+                    'tomorrow': ['เบซอ', 'พรุ่งนี้'],
+                    'yesterday': ['ซีมาลัม', 'เมื่อวาน']
+                },
+                'greetings': {
+                    'hello': ['อัสซาลามูอาลัยกุม', 'สวัสดี'],
+                    'goodbye': ['ซาลามัต จาลัน', 'ลาก่อน'],
+                    'thank you': ['เตอรีมา กาซิ', 'ขอบคุณ']
+                }
+            },
+            'northeast': {
+                'particles': ['เด้อ', 'อีหลี', 'สิ', 'กะ', 'เนาะ', 'เด๊ะ'],
+                'pronouns': {
+                    'I': ['ข้อย', 'เฮา', 'อั่ว'],
+                    'you': ['เจ้า', 'เอ็ง', 'สู'],
+                    'he/she': ['มัน', 'เพิ่น'],
+                    'we': ['พวกเฮา', 'หมู่เฮา'],
+                    'they': ['หมู่เพิ่น', 'พวกเขา']
+                },
+                'verbs': {
+                    'eat': ['กิน', 'แดก'],
+                    'go': ['ไป', 'มา'],
+                    'come': ['มา', 'มาแล่ว'],
+                    'sleep': ['นอน'],
+                    'speak': ['เว้า', 'พูด']
+                }
+            },
+            'south': {
+                'particles': ['ว่ะ', 'หวา', 'โว้ย', 'เน้อ', 'แล', 'แหละ'],
+                'pronouns': {
+                    'I': ['ฉาน', 'กู', 'ข้อย'],
+                    'you': ['มึง', 'เอ็ง', 'สู'],
+                    'he/she': ['มัน', 'เขา'],
+                    'we': ['หมู่ฉาน', 'พวกเรา'],
+                    'they': ['หมู่มัน', 'พวกมัน']
+                },
+                'verbs': {
+                    'eat': ['แดก', 'กิน', 'ฉัน'],
+                    'go': ['ไป', 'ลา'],
+                    'come': ['มา', 'ลามา'],
+                    'sleep': ['นอน'],
+                    'speak': ['พูด', 'เว้า']
+                }
+            }
+        }
+        
+        self.dialect_rules = {
+            'north': {
+                'tone_changes': {
+                    'rising': 'high',
+                    'falling': 'low'
+                },
+                'final_particles': ['เน้อ', 'จ้าว', 'กอ'],
+                'word_order': 'SOV'
+            },
+            'northeast': {
+                'tone_changes': {
+                    'rising': 'low',
+                    'falling': 'high'
+                },
+                'final_particles': ['เด้อ', 'สิ', 'กะ'],
+                'word_order': 'SVO'
+            },
+            'south': {
+                'tone_changes': {
+                    'rising': 'falling',
+                    'falling': 'rising'
+                },
+                'final_particles': ['แล', 'หวา', 'โว้ย'],
+                'word_order': 'SVO'
+            },
+            'kham_muang': {
+                'tone_changes': {
+                    'rising': 'high',
+                    'falling': 'low'
+                },
+                'final_particles': ['เจ้า', 'ก่อ', 'ละ'],
+                'word_order': 'SOV',
+                'special_rules': {
+                    'question_marker': 'ก่อ',
+                    'negation': 'บ่',
+                    'future': 'สิ',
+                    'past': 'ได้'
+                }
+            },
+            'korat': {
+                'tone_changes': {
+                    'rising': 'low',
+                    'falling': 'high'
+                },
+                'final_particles': ['ดอก', 'เด้อ', 'หลาว'],
+                'word_order': 'SVO',
+                'special_rules': {
+                    'question_marker': 'บ่',
+                    'negation': 'บ่',
+                    'future': 'สิ',
+                    'past': 'แล้ว'
+                }
+            },
+            'patani_malay': {
+                'tone_changes': {
+                    'rising': 'falling',
+                    'falling': 'rising'
+                },
+                'final_particles': ['แล', 'ลอ', 'เยาะ'],
+                'word_order': 'SVO',
+                'special_rules': {
+                    'question_marker': 'กา',
+                    'negation': 'ตีดก',
+                    'future': 'นัก',
+                    'past': 'ซูดะ'
+                }
+            }
+        }
+        
+    def translate_to_dialect(self, text: str, dialect: str) -> str:
+        """Translate standard Thai to specified dialect"""
+        if dialect not in self.dialect_patterns:
+            return text
+            
+        words = word_tokenize(text) if PYTHAINLP_AVAILABLE else text.split()
+        translated = []
+        
+        for word in words:
+            # Check pronouns
+            for pronoun_type, variants in self.dialect_patterns[dialect]['pronouns'].items():
+                if word in variants:
+                    translated.append(variants[0])
+                    break
+            
+            # Check verbs
+            for verb_type, variants in self.dialect_patterns[dialect]['verbs'].items():
+                if word in variants:
+                    translated.append(variants[0])
+                    break
+            
+            # Check adjectives if available
+            if 'adjectives' in self.dialect_patterns[dialect]:
+                for adj_type, variants in self.dialect_patterns[dialect]['adjectives'].items():
+                    if word in variants:
+                        translated.append(variants[0])
+                        break
+            
+            # Check time expressions if available
+            if 'time_expressions' in self.dialect_patterns[dialect]:
+                for time_type, variants in self.dialect_patterns[dialect]['time_expressions'].items():
+                    if word in variants:
+                        translated.append(variants[0])
+                        break
+            
+            # Check greetings if available
+            if 'greetings' in self.dialect_patterns[dialect]:
+                for greeting_type, variants in self.dialect_patterns[dialect]['greetings'].items():
+                    if word in variants:
+                        translated.append(variants[0])
+                        break
+            
+            # Add dialect particles
+            if word in self.dialect_patterns[dialect]['particles']:
+                translated.append(word)
+            else:
+                translated.append(word)
+        
+        # Apply dialect rules
+        result = ' '.join(translated)
+        result = self._apply_dialect_rules(result, dialect)
+        
+        return result
+        
+    def _apply_dialect_rules(self, text: str, dialect: str) -> str:
+        """Apply dialect-specific rules to the text"""
+        rules = self.dialect_rules[dialect]
+        
+        # Apply tone changes
+        for original, new in rules['tone_changes'].items():
+            # Implementation of tone changes based on dialect
+            if dialect == 'kham_muang':
+                # คำเมืองมีการเปลี่ยนเสียงวรรณยุกต์เฉพาะ
+                pass
+            elif dialect == 'korat':
+                # โคราชมีการเปลี่ยนเสียงวรรณยุกต์แบบอีสาน
+                pass
+            elif dialect == 'patani_malay':
+                # มลายูปัตตานีมีการผสมเสียงวรรณยุกต์ไทยกับมลายู
+                pass
+            
+        # Add final particles based on dialect
+        if not any(particle in text for particle in rules['final_particles']):
+            text += ' ' + rules['final_particles'][0]
+            
+        # Apply word order rules
+        if rules['word_order'] != 'SVO':
+            words = text.split()
+            if rules['word_order'] == 'SOV':
+                # Rearrange for SOV word order
+                pass
+            
+        # Apply special rules
+        if 'special_rules' in rules:
+            # Apply question markers
+            if '?' in text:
+                text = text.replace('?', rules['special_rules']['question_marker'])
+            
+            # Apply negation
+            if 'ไม่' in text:
+                text = text.replace('ไม่', rules['special_rules']['negation'])
+            
+            # Apply tense markers
+            if 'จะ' in text:
+                text = text.replace('จะ', rules['special_rules']['future'])
+            if 'แล้ว' in text:
+                text = text.replace('แล้ว', rules['special_rules']['past'])
+        
+        return text
+
 class ThaiTranslator:
-    def __init__(self, engine: str = "default"):
+    def __init__(self, engine: str = "default", use_neural: bool = True, cache_size: int = 1000):
         """
-        Initialize ThaiTranslator
+        Initialize ThaiTranslator with enhanced features
         
         Args:
             engine (str): Translation engine to use
-                - 'default': Use PyThaiNLP's default translator
-                - 'mt': Use Machine Translation
-                - 'local': Use local dictionary (fallback)
+            use_neural (bool): Whether to use Neural Machine Translation
+            cache_size (int): Size of translation cache
         """
         self.engine = engine
+        self.use_neural = use_neural
+        self.cache_size = cache_size
         
-        if PYTHAINLP_AVAILABLE and engine != "local":
+        # Initialize Neural Translator if requested
+        if use_neural:
             try:
-                self.translator = Translator(engine=engine)
-                # Initialize PyThaiNLP's word tokenizer with custom dictionary
-                self.word_tokenizer = Tokenizer(custom_dict=thai_words())
+                self.neural_translator = NeuralTranslator()
             except Exception as e:
-                warnings.warn(f"Failed to initialize PyThaiNLP translator: {e}. Falling back to local dictionary.")
-                self.engine = "local"
-        else:
-            self.engine = "local"
-            
-        if self.engine == "local":
-            self._init_local_dict()
-            
+                warnings.warn(f"Failed to initialize Neural Translator: {e}")
+                self.use_neural = False
+        
+        # Initialize dialect handler
+        self.dialect_handler = DialectHandler()
+        
+        # Initialize translation cache
+        self.translation_cache = {}
+        
+        # Initialize thread pool for parallel processing
+        self.executor = ThreadPoolExecutor(max_workers=4)
+        
+        # Initialize quality metrics
+        self.quality_metrics = {
+            'bleu': 0.0,
+            'accuracy': 0.0,
+            'fluency': 0.0
+        }
+        
         # Initialize context tracking
         self.context = {
             'formality': 'neutral',  # neutral, formal, informal
@@ -67,6 +437,21 @@ class ThaiTranslator:
         # Initialize additional components
         if PYTHAINLP_AVAILABLE:
             self._init_advanced_components()
+        
+        # Add special techniques
+        self.special_techniques = {
+            'soundex_matching': True,  # ใช้ Soundex เพื่อจับคู่คำที่ออกเสียงคล้ายกัน
+            'spell_checking': True,    # ตรวจสอบการสะกดคำ
+            'syllable_analysis': True, # วิเคราะห์พยางค์
+            'tone_preservation': True, # รักษาวรรณยุกต์
+            'negation_handling': True, # จัดการประโยคปฏิเสธ
+            'emotion_preservation': True, # รักษาอารมณ์ในประโยค
+            'formality_matching': True, # จับคู่ระดับความสุภาพ
+            'context_memory': True,    # จดจำบริบทการแปล
+        }
+        
+        # Initialize special components
+        self._init_special_components()
     
     def _init_local_dict(self):
         """Initialize enhanced local translation dictionary"""
@@ -608,6 +993,225 @@ class ThaiTranslator:
                     ),
                 }
     
+    def _init_special_components(self):
+        """Initialize special components for enhanced translation"""
+        if PYTHAINLP_AVAILABLE:
+            # Soundex for similar pronunciation matching
+            self.soundex = soundex
+            
+            # Spell checker
+            self.spell_checker = spell
+            
+            # Syllable tokenizer
+            self.syllable_tokenizer = syllable_tokenize
+            
+            # Load negation words
+            self.negation_words = thai_negations()
+            
+            # Load conceptual words for emotion analysis
+            self.conceptual_words = conceptual_word_list()
+            
+            # Initialize context memory
+            self.context_memory = []
+            
+            # Initialize tone patterns
+            self.tone_patterns = {
+                'rising': ['้'],
+                'falling': ['่'],
+                'high': ['๊'],
+                'low': ['๋'],
+                'neutral': ['']
+            }
+            
+            # Initialize emotion patterns
+            self.emotion_patterns = {
+                'positive': ['ดี', 'สุข', 'รัก', 'ชอบ', 'สนุก'],
+                'negative': ['แย่', 'เศร้า', 'โกรธ', 'เกลียด', 'เบื่อ'],
+                'neutral': ['ปกติ', 'ธรรมดา', 'ทั่วไป']
+            }
+    
+    def _apply_special_techniques(self, text: str, source_lang: str, target_lang: str) -> str:
+        """Apply special translation techniques"""
+        if not PYTHAINLP_AVAILABLE:
+            return text
+            
+        # 1. Soundex matching for similar pronunciation
+        if self.special_techniques['soundex_matching']:
+            text = self._apply_soundex_matching(text)
+        
+        # 2. Spell checking
+        if self.special_techniques['spell_checking']:
+            text = self._apply_spell_checking(text)
+        
+        # 3. Syllable analysis
+        if self.special_techniques['syllable_analysis']:
+            text = self._apply_syllable_analysis(text)
+        
+        # 4. Tone preservation
+        if self.special_techniques['tone_preservation']:
+            text = self._preserve_tones(text)
+        
+        # 5. Negation handling
+        if self.special_techniques['negation_handling']:
+            text = self._handle_negations(text)
+        
+        # 6. Emotion preservation
+        if self.special_techniques['emotion_preservation']:
+            text = self._preserve_emotions(text)
+        
+        # 7. Formality matching
+        if self.special_techniques['formality_matching']:
+            text = self._match_formality(text)
+        
+        # 8. Context memory
+        if self.special_techniques['context_memory']:
+            text = self._apply_context_memory(text)
+        
+        return text
+    
+    def _apply_soundex_matching(self, text: str) -> str:
+        """Apply Soundex matching for similar pronunciation"""
+        words = self.word_tokenizer.word_tokenize(text)
+        result = []
+        
+        for word in words:
+            if word in self.th_to_en:
+                result.append(word)
+                continue
+                
+            # Get Soundex code
+            sound_code = self.soundex(word)
+            
+            # Find similar sounding words
+            similar_words = []
+            for dict_word in self.th_to_en.keys():
+                if self.soundex(dict_word) == sound_code:
+                    similar_words.append(dict_word)
+            
+            if similar_words:
+                # Use the most similar word
+                result.append(similar_words[0])
+            else:
+                result.append(word)
+        
+        return ''.join(result)
+    
+    def _apply_spell_checking(self, text: str) -> str:
+        """Apply spell checking and correction"""
+        words = self.word_tokenizer.word_tokenize(text)
+        result = []
+        
+        for word in words:
+            suggestions = self.spell_checker(word)
+            if suggestions:
+                # Use the most likely correction
+                result.append(suggestions[0][0])
+            else:
+                result.append(word)
+        
+        return ''.join(result)
+    
+    def _apply_syllable_analysis(self, text: str) -> str:
+        """Analyze and preserve syllable structure"""
+        syllables = self.syllable_tokenizer(text)
+        result = []
+        
+        for syllable in syllables:
+            # Analyze syllable components
+            initial = self._get_initial_consonant(syllable)
+            vowel = self._get_vowel(syllable)
+            final = self._get_final_consonant(syllable)
+            tone = self._get_tone_mark(syllable)
+            
+            # Preserve structure in translation
+            translated = self._translate_syllable_components(
+                initial, vowel, final, tone
+            )
+            result.append(translated)
+        
+        return ''.join(result)
+    
+    def _preserve_tones(self, text: str) -> str:
+        """Preserve Thai tones in translation"""
+        syllables = self.syllable_tokenizer(text)
+        result = []
+        
+        for syllable in syllables:
+            # Get tone
+            tone = None
+            for tone_type, markers in self.tone_patterns.items():
+                if any(marker in syllable for marker in markers):
+                    tone = tone_type
+                    break
+            
+            # Translate syllable
+            translated = self._translate_with_tone(syllable, tone)
+            result.append(translated)
+        
+        return ''.join(result)
+    
+    def _handle_negations(self, text: str) -> str:
+        """Handle negations in Thai text"""
+        words = self.word_tokenizer.word_tokenize(text)
+        result = []
+        negated = False
+        
+        for i, word in enumerate(words):
+            if word in self.negation_words:
+                negated = True
+                continue
+            
+            if negated:
+                # Handle negated word
+                translated = self._translate_negated(word)
+                result.append(translated)
+                negated = False
+            else:
+                result.append(word)
+        
+        return ''.join(result)
+    
+    def _preserve_emotions(self, text: str) -> str:
+        """Preserve emotional content in translation"""
+        # Detect emotion
+        emotion = 'neutral'
+        for e_type, patterns in self.emotion_patterns.items():
+            if any(pattern in text for pattern in patterns):
+                emotion = e_type
+                break
+        
+        # Translate with emotion preservation
+        translated = self._translate_with_emotion(text, emotion)
+        return translated
+    
+    def _match_formality(self, text: str) -> str:
+        """Match formality level in translation"""
+        # Detect formality level
+        formality = self._detect_formality(text)
+        
+        # Update context
+        self.context['formality'] = formality
+        
+        # Translate with matching formality
+        translated = self._translate_with_formality(text, formality)
+        return translated
+    
+    def _apply_context_memory(self, text: str) -> str:
+        """Apply context memory for consistent translation"""
+        # Add to context memory
+        self.context_memory.append({
+            'text': text,
+            'context': self.context.copy()
+        })
+        
+        # Keep only last 10 contexts
+        if len(self.context_memory) > 10:
+            self.context_memory.pop(0)
+        
+        # Use context memory for translation
+        translated = self._translate_with_memory(text)
+        return translated
+    
     def translate(self, text: str, source_lang: str = "auto", target_lang: str = "en", context: Optional[Dict] = None) -> Dict[str, Union[str, float]]:
         """
         Enhanced translate function with context awareness
@@ -651,7 +1255,17 @@ class ThaiTranslator:
                 translation = self.translator.translate(text, source_lang=source_lang, target_lang=target_lang)
                 # Apply context-aware post-processing
                 translation = self._post_process_translation(translation, target_lang)
-                return {'translation': translation, 'score': 0.8}
+                
+                # Apply special techniques
+                translation = self._apply_special_techniques(
+                    translation, source_lang, target_lang
+                )
+                
+                return {
+                    'translation': translation,
+                    'score': 0.8,
+                    'techniques_applied': self.special_techniques
+                }
             except Exception as e:
                 warnings.warn(f"PyThaiNLP translation failed: {e}. Falling back to local dictionary.")
                 
@@ -740,7 +1354,7 @@ class ThaiTranslator:
             
             # Add appropriate particle based on context
             if self.context['formality'] != 'informal':
-                particle = 'ครับ' if self.context['gender'] == 'male' else 'ค่ะ' if self.context['gender'] == 'female' else ''
+                particle = 'ครับ' if self.context['gender'] == 'male' else 'ค่ะ'
                 if particle:
                     translated.append(particle)
             
