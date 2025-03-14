@@ -591,8 +591,8 @@ class ThaiTokenClassifier(TransformerBase):
         **kwargs
     ) -> Union[List[Dict[str, Any]], List[List[Dict[str, Any]]]]:
         """Zero-shot token classification
-        
-        Args:
+    
+    Args:
             texts: Input text or list of texts
             candidate_labels: List of possible labels
             **kwargs: Additional arguments for classification
