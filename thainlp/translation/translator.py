@@ -291,7 +291,7 @@ class ThaiTranslator(TransformerBase):
                 result['best_translation'] = translations[0]['translation_text']
             else:
                 result['translation'] = translations[0]['translation_text']
-                
+            
             all_results.append(result)
             
         if single_text:
@@ -332,14 +332,14 @@ class ThaiTranslator(TransformerBase):
         **kwargs
     ) -> Dict[str, Any]:
         """Perform zero-shot translation through pivot language
-        
-        Args:
+    
+    Args:
             text: Input text
             target_lang: Target language code
             pivot_lang: Pivot language code
             **kwargs: Additional arguments for translation
-            
-        Returns:
+        
+    Returns:
             Dictionary with translation results
         """
         # First translate to pivot language
