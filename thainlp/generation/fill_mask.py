@@ -40,6 +40,11 @@ class ThaiFillMask(TransformerBase):
         if model_name_or_path is None:
             model_name_or_path = "airesearch/wangchanberta-base-att-spm-uncased"
             
+        # Special handling for Gemma models
+        self.is_gemma = "google/gemma" in str(model_name_or_path)
+        if self.is_gemma:
+            kwargs['trust_remote_code'] = True
+            
         self.max_length = max_length
         self.top_k = top_k
         
@@ -57,8 +62,8 @@ class ThaiFillMask(TransformerBase):
             device=0 if use_cuda and torch.cuda.is_available() else -1
         )
         
-        # Get mask token
-        self.mask_token = self.tokenizer.mask_token
+        # Get mask token - Gemma uses <mask> instead of [MASK]
+        self.mask_token = "<mask>" if self.is_gemma else self.tokenizer.mask_token
         
     def _validate_input(self, text: str) -> bool:
         """Validate input text contains mask token
@@ -359,4 +364,4 @@ class ThaiFillMask(TransformerBase):
                 'predictions': predictions
             })
             
-        return results 
+        return results

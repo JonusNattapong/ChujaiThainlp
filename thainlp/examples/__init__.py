@@ -1,3 +1,3 @@
 """
-ThaiNLP Examples Package
-""" 
+Examples for using the ThaiNLP library.
+"""
