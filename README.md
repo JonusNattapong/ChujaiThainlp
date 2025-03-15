@@ -72,17 +72,172 @@ ThaiNLP มีฟีเจอร์ต่างๆ ดังนี้:
 - การสกัดคุณลักษณะขั้นสูงสำหรับการวิเคราะห์
 - รองรับการใช้ Word Embeddings จาก PyThaiNLP
 
-### 13. การสร้างข้อความ (Text Generation)
+### 13. การเติมคำในช่องว่าง (Fill-Mask)
+- รองรับการเติมคำในช่องว่างด้วยโมเดลภาษาไทย
+- รองรับการใช้โมเดล WangchanBERTa และ Gemma
+- สามารถเติมหลายช่องว่างพร้อมกันได้
+- มีฟังก์ชันวิเคราะห์บริบทของคำ
+
+### 14. การสร้างข้อความ (Text Generation)
 - การสร้างข้อความด้วยเทมเพลต
 - การสร้างข้อความด้วยรูปแบบ n-gram
 - การสร้างข้อความตามรูปแบบไวยากรณ์
 - รองรับการใช้โมเดลภาษาขั้นสูงสำหรับภาษาไทย
 
-### 14. การวัดความคล้ายคลึงของข้อความ (Text Similarity)
-- การวัดความคล้ายคลึงด้วยวิธีต่างๆ (Jaccard, Cosine, n-gram, Levenshtein, LCS)
-- การค้นหาข้อความที่คล้ายคลึงกัน
-- การตรวจสอบข้อความซ้ำ
+### 15. การวัดความคล้ายคลึงของประโยค (Sentence Similarity)
+- การวัดความคล้ายคลึงด้วย Cosine Similarity
+- รองรับการใช้ Sentence Transformers
+- สามารถค้นหาประโยคที่คล้ายคลึงกันจากชุดข้อมูลได้
+- มีฟังก์ชันจัดกลุ่มประโยคตามความคล้ายคลึง
+
+### 16. การประมวลผลคำพูดภาษาไทย (Thai Speech Processing)
+- รองรับการรู้จำเสียงพูด (Speech-to-Text)
+- รองรับการสังเคราะห์เสียงพูด (Text-to-Speech)
+- มีฟังก์ชันระบุภาษาจากเสียงพูด
+- สามารถแบ่งส่วนเสียงตามผู้พูด (Speaker Diarization)
+- ปรับปรุงคุณภาพเสียงได้ (Audio Enhancement)
+- ตรวจจับอารมณ์จากเสียงพูดได้
+- มีฟังก์ชันตรวจจับช่วงที่มีการพูด (Voice Activity Detection)
+- คำนวณสถิติของเสียงพูดได้ (ระดับเสียง, ความเร็ว, ฯลฯ)
+- รองรับการประมวลผลไฟล์เสียงจำนวนมากพร้อมกัน
+- ดูตัวอย่างการใช้งานได้ที่ [examples/speech_example.py](thainlp/examples/speech_example.py)
+
+### 17. การสรุปบทสนทนา (Conversation Summarization)
+- สรุปบทสนทนาภาษาไทยแบบอัตโนมัติ
+- สกัดประโยคสำคัญและหัวข้อหลัก
+- วิเคราะห์สถิติผู้พูด (จำนวนข้อความ, จำนวนคำถาม)
+- รองรับการสรุปแยกตามหัวข้อ
+- ดูตัวอย่างการใช้งานได้ที่ [examples/conversation_summary_example.py](thainlp/examples/conversation_summary_example.py)
+
+### 18. การเพิ่มข้อมูลภาษาไทย (Thai Data Augmentation)
+- มีเทคนิคการเพิ่มข้อมูลที่หลากหลาย เช่น การแทนที่คำพ้องความหมาย, การลบคำ, การสลับคำ, การแทรกคำ, และ back-translation
+- รองรับการเพิ่มข้อมูลโดยใช้แม่แบบ (template-based)
+- มีฟังก์ชัน EDA (Easy Data Augmentation)
+- ดูตัวอย่างการใช้งานได้ที่ [examples/data_augmentation_example.py](thainlp/examples/data_augmentation_example.py)
+
+### 19. การประมวลผลภาษาไทยแบบปกป้องความเป็นส่วนตัว (Privacy-Preserving Thai NLP)
+- มีฟังก์ชันสำหรับปกปิดข้อมูลส่วนบุคคล (PII) เช่น ชื่อ, ที่อยู่, เบอร์โทรศัพท์
+- ใช้เทคนิค Differential Privacy เพื่อเพิ่ม Noise ในข้อมูล
+- รองรับการทำ Hashing สำหรับข้อมูลที่อ่อนไหว
+- ดูตัวอย่างการใช้งานได้ที่ [examples/privacy_example.py](thainlp/examples/privacy_example.py)
+
+## การติดตั้ง
+# ThaiNLP
+
+ไลบรารีสำหรับการประมวลผลภาษาธรรมชาติไทย (Thai Natural Language Processing)
+
+## คุณสมบัติ
+
+ThaiNLP มีฟีเจอร์ต่างๆ ดังนี้:
+
+### 1. การตัดคำ (Tokenization)
+- ใช้อัลกอริธึม Maximum Matching สำหรับการตัดคำภาษาไทย
+- รองรับการใช้อัลกอริธึมจาก PyThaiNLP เช่น Longest Matching, Newmm, Attacut
+- มีดิกชันนารีคำศัพท์ภาษาไทยที่ครอบคลุม
+- รองรับการตัดคำระดับประโยค (Sentence Tokenization)
+- รองรับการตัดคำย่อย (Subword Tokenization)
+
+### 2. การแท็กส่วนของคำพูด (Part-of-Speech Tagging)
+- ใช้โมเดล Hidden Markov Model (HMM) สำหรับการแท็กส่วนของคำพูด
+- รองรับการใช้ Perceptron Tagger จาก PyThaiNLP
+- รองรับการใช้ Artagger สำหรับความแม่นยำสูง
+- รองรับการฝึกโมเดลด้วยข้อมูลที่มีการแท็กไว้แล้ว
+
+### 3. การรู้จำหน่วยงานที่มีชื่อเสียง (Named Entity Recognition)
+- ใช้กฎและดิกชันนารีสำหรับการรู้จำหน่วยงานที่มีชื่อเสียง
+- รองรับการรู้จำชื่อบุคคล สถานที่ องค์กร วันที่ เวลา เงิน URL และแฮชแท็ก
+- รองรับการใช้โมเดล CRF และ BiLSTM-CRF จาก PyThaiNLP
+
+### 4. การวิเคราะห์อารมณ์ (Sentiment Analysis)
+- ใช้ดิกชันนารีคำศัพท์ที่มีอารมณ์บวกและลบ
+- รองรับการวิเคราะห์อารมณ์ของข้อความภาษาไทย
+- รองรับการใช้โมเดลที่ฝึกด้วย Thai Sentiment Corpus
+
+### 5. การตรวจสอบการสะกดคำ (Spell Checking)
+- ใช้ Edit Distance สำหรับการตรวจสอบและแก้ไขการสะกดคำ
+- รองรับการตรวจสอบการสะกดคำภาษาไทยด้วย PyThaiNLP
+- รองรับการแนะนำคำที่ถูกต้องตามบริบท
+
+### 6. การสรุปข้อความ (Text Summarization)
+- ใช้อัลกอริธึม TextRank สำหรับการสรุปข้อความ
+- รองรับการสรุปข้อความภาษาไทยแบบสกัดประโยค (Extractive)
+- รองรับการสรุปข้อความแบบสร้างใหม่ (Abstractive) ด้วยโมเดลขั้นสูง
+
+### 7. เครื่องมือช่วยเหลือ (Utilities)
+- การตรวจสอบอักขระภาษาไทย
+- การลบวรรณยุกต์และรูปแบบต่างๆ
+- การแปลงข้อความให้เป็นมาตรฐาน
+- การแปลงภาษาไทยเป็นอักษรโรมัน (Romanization)
+- การจัดรูปแบบวันที่และเวลาในภาษาไทย
+- การตรวจสอบภาษา
+
+### 8. การจำแนกข้อความ (Text Classification)
+- การจำแนกข้อความตามหมวดหมู่ (เช่น อารมณ์, หัวข้อ, สแปม)
+- การจำแนกแบบ Zero-shot โดยไม่ต้องฝึกโมเดลล่วงหน้า
+- รองรับการใช้โมเดลที่ฝึกด้วยชุดข้อมูลภาษาไทย
+
+### 9. การจำแนกโทเค็น (Token Classification)
+- การแท็กส่วนของคำพูดแบบละเอียด
+- การรู้จำหน่วยงานที่มีชื่อเสียงแบบละเอียด
+- รองรับการใช้โมเดลที่ฝึกด้วยชุดข้อมูลภาษาไทย
+
+### 10. การตอบคำถาม (Question Answering)
+- การตอบคำถามจากบริบทที่กำหนด
+- การตอบคำถามจากข้อมูลตาราง
+- รองรับการใช้โมเดลที่ฝึกด้วยชุดข้อมูลภาษาไทย
+
+### 11. การแปลภาษา (Translation)
+- การแปลระหว่างภาษาไทยและภาษาอังกฤษ
+- การตรวจสอบภาษาอัตโนมัติ
+- รองรับการใช้โมเดลแปลภาษาจาก PyThaiNLP
+
+### 12. การสกัดคุณลักษณะ (Feature Extraction)
+- การสกัดคุณลักษณะพื้นฐานจากข้อความภาษาไทย
+- การสกัดคุณลักษณะขั้นสูงสำหรับการวิเคราะห์
 - รองรับการใช้ Word Embeddings จาก PyThaiNLP
+
+### 13. การเติมคำในช่องว่าง (Fill-Mask)
+- รองรับการเติมคำในช่องว่างด้วยโมเดลภาษาไทย
+- รองรับการใช้โมเดล WangchanBERTa และ Gemma
+- สามารถเติมหลายช่องว่างพร้อมกันได้
+- มีฟังก์ชันวิเคราะห์บริบทของคำ
+
+### 14. การสร้างข้อความ (Text Generation)
+- การสร้างข้อความด้วยเทมเพลต
+- การสร้างข้อความด้วยรูปแบบ n-gram
+- การสร้างข้อความตามรูปแบบไวยากรณ์
+- รองรับการใช้โมเดลภาษาขั้นสูงสำหรับภาษาไทย
+
+### 15. การวัดความคล้ายคลึงของประโยค (Sentence Similarity)
+- การวัดความคล้ายคลึงด้วย Cosine Similarity
+- รองรับการใช้ Sentence Transformers
+- สามารถค้นหาประโยคที่คล้ายคลึงกันจากชุดข้อมูลได้
+- มีฟังก์ชันจัดกลุ่มประโยคตามความคล้ายคลึง
+
+### 16. การประมวลผลคำพูดภาษาไทย (Thai Speech Processing)
+- รองรับการรู้จำเสียงพูด (Speech-to-Text)
+- รองรับการสังเคราะห์เสียงพูด (Text-to-Speech)
+- มีฟังก์ชันระบุภาษาจากเสียงพูด
+- สามารถแบ่งส่วนเสียงตามผู้พูด (Speaker Diarization)
+- ปรับปรุงคุณภาพเสียงได้ (Audio Enhancement)
+- ตรวจจับอารมณ์จากเสียงพูดได้
+- มีฟังก์ชันตรวจจับช่วงที่มีการพูด (Voice Activity Detection)
+- คำนวณสถิติของเสียงพูดได้ (ระดับเสียง, ความเร็ว, ฯลฯ)
+- รองรับการประมวลผลไฟล์เสียงจำนวนมากพร้อมกัน
+- ดูตัวอย่างการใช้งานได้ที่ [examples/speech_example.py](thainlp/examples/speech_example.py)
+
+### 17. การสรุปบทสนทนา (Conversation Summarization)
+- สรุปบทสนทนาภาษาไทยแบบอัตโนมัติ
+- สกัดประโยคสำคัญและหัวข้อหลัก
+- วิเคราะห์สถิติผู้พูด (จำนวนข้อความ, จำนวนคำถาม)
+- รองรับการสรุปแยกตามหัวข้อ
+- ดูตัวอย่างการใช้งานได้ที่ [examples/conversation_summary_example.py](thainlp/examples/conversation_summary_example.py)
+
+### 18. การประมวลผลภาษาไทยแบบปกป้องความเป็นส่วนตัว (Privacy-Preserving Thai NLP)
+- มีฟังก์ชันสำหรับปกปิดข้อมูลส่วนบุคคล (PII) เช่น ชื่อ, ที่อยู่, เบอร์โทรศัพท์
+- ใช้เทคนิค Differential Privacy เพื่อเพิ่ม Noise ในข้อมูล
+- รองรับการทำ Hashing สำหรับข้อมูลที่อ่อนไหว
+- ดูตัวอย่างการใช้งานได้ที่ [examples/privacy_example.py](thainlp/examples/privacy_example.py)
 
 ## การติดตั้ง
 
@@ -107,6 +262,55 @@ pip install thainlp[dev]
 ```
 
 ## การใช้งาน
+
+### การเติมคำในช่องว่าง (Fill-Mask)
+
+```python
+from thainlp.generation import ThaiFillMask
+
+# ใช้ WangchanBERTa (default)
+fill_mask = ThaiFillMask()
+text = "ฉันชอบ<mask>แมว"
+predictions = fill_mask.fill_mask(text)
+print(predictions)
+
+# ใช้ Gemma
+fill_mask_gemma = ThaiFillMask(model_name_or_path="google/gemma-2b-it")
+text = "ฉันชอบ<mask>แมว"
+predictions = fill_mask_gemma.fill_mask(text)
+print(predictions)
+
+# เติมหลายช่องว่าง
+text = "ฉัน<mask><mask>แมว"
+predictions = fill_mask.fill_multiple_masks(text)
+print(predictions)
+```
+
+### การวัดความคล้ายคลึงของประโยค (Sentence Similarity)
+
+```python
+from thainlp.similarity import ThaiSentenceSimilarity
+
+# ใช้ Sentence Transformers (default)
+similarity = ThaiSentenceSimilarity()
+text1 = "ฉันชอบกินข้าวผัด"
+text2 = "ฉันชอบทานข้าวผัด"
+score = similarity.compute_similarity(text1, text2)
+print(score)
+
+# ใช้ WangchanBERTa
+similarity_wangchan = ThaiSentenceSimilarity(embedding_type="transformer")
+text1 = "ฉันชอบกินข้าวผัด"
+text2 = "ฉันชอบทานข้าวผัด"
+score = similarity_wangchan.compute_similarity(text1, text2)
+print(score)
+
+# ค้นหาประโยคที่คล้ายคลึง
+corpus = ["ฉันชอบกินข้าว", "ฉันชอบแมว", "อากาศวันนี้ดี"]
+query = "ฉันชอบสุนัข"
+results = similarity.find_most_similar(query, corpus)
+print(results)
+```
 
 ### การตัดคำ (Tokenization)
 
