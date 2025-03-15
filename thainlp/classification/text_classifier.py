@@ -5,9 +5,9 @@ Text Classification for Thai Text using Transformer models
 from typing import List, Dict, Union, Optional
 import torch
 import torch.nn.functional as F
-from ..core.transformers import TransformerBase
+from transformers import AutoModelForSequenceClassification, AutoTokenizer, pipeline
 
-class ThaiTextClassifier(TransformerBase):
+class ThaiTextClassifier:
     """Text classifier for Thai text using transformer models"""
     
     def __init__(
@@ -26,12 +26,8 @@ class ThaiTextClassifier(TransformerBase):
         if model_name_or_path is None:
             model_name_or_path = self.get_default_model()
             
-        super().__init__(
-            model_name_or_path=model_name_or_path,
-            task_type="text-classification",
-            num_labels=num_labels,
-            **kwargs
-        )
+        self.model = AutoModelForSequenceClassification.from_pretrained(model_name_or_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
         
     @staticmethod
     def get_default_model() -> str:
@@ -54,8 +50,12 @@ class ThaiTextClassifier(TransformerBase):
         Returns:
             List of dictionaries containing classification probabilities
         """
+        # Handle single text input
+        if isinstance(texts, str):
+            texts = [texts]
+            
         # Encode texts
-        inputs = self.encode(texts, **kwargs)
+        inputs = self.tokenizer(texts, return_tensors="pt", padding=True, truncation=True)
         
         # Get model predictions
         with torch.no_grad():
@@ -72,110 +72,7 @@ class ThaiTextClassifier(TransformerBase):
             results.append(result)
             
         return results[0] if isinstance(texts, str) else results
-    
-    def train(
-        self,
-        train_texts: List[str],
-        train_labels: List[Union[int, str]],
-        validation_texts: Optional[List[str]] = None,
-        validation_labels: Optional[List[Union[int, str]]] = None,
-        batch_size: int = 16,
-        num_epochs: int = 3,
-        learning_rate: float = 2e-5,
-        max_length: int = 512,
-        **kwargs
-    ):
-        """Fine-tune the model on custom data
-        
-        Args:
-            train_texts: Training texts
-            train_labels: Training labels
-            validation_texts: Validation texts
-            validation_labels: Validation labels
-            batch_size: Training batch size
-            num_epochs: Number of training epochs
-            learning_rate: Learning rate
-            max_length: Maximum sequence length
-            **kwargs: Additional training arguments
-        """
-        from torch.utils.data import DataLoader, TensorDataset
-        from torch.optim import AdamW
-        from tqdm.auto import tqdm
-        
-        # Prepare training data
-        train_encodings = self.encode(train_texts, max_length=max_length)
-        train_labels = torch.tensor(train_labels)
-        train_dataset = TensorDataset(
-            train_encodings["input_ids"],
-            train_encodings["attention_mask"],
-            train_labels
-        )
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-        
-        # Prepare validation data if provided
-        if validation_texts and validation_labels:
-            val_encodings = self.encode(validation_texts, max_length=max_length)
-            val_labels = torch.tensor(validation_labels)
-            val_dataset = TensorDataset(
-                val_encodings["input_ids"],
-                val_encodings["attention_mask"],
-                val_labels
-            )
-            val_loader = DataLoader(val_dataset, batch_size=batch_size)
-        
-        # Prepare optimizer
-        optimizer = AdamW(self.model.parameters(), lr=learning_rate)
-        
-        # Training loop
-        self.model.train()
-        for epoch in range(num_epochs):
-            total_loss = 0
-            progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}")
             
-            for batch in progress_bar:
-                optimizer.zero_grad()
-                input_ids, attention_mask, labels = [b.to(self.device) for b in batch]
-                
-                outputs = self.model(
-                    input_ids=input_ids,
-                    attention_mask=attention_mask,
-                    labels=labels
-                )
-                
-                loss = outputs.loss
-                loss.backward()
-                optimizer.step()
-                
-                total_loss += loss.item()
-                progress_bar.set_postfix({"loss": total_loss / len(train_loader)})
-            
-            # Validation
-            if validation_texts and validation_labels:
-                self.model.eval()
-                val_loss = 0
-                correct = 0
-                total = 0
-                
-                with torch.no_grad():
-                    for batch in val_loader:
-                        input_ids, attention_mask, labels = [b.to(self.device) for b in batch]
-                        outputs = self.model(
-                            input_ids=input_ids,
-                            attention_mask=attention_mask,
-                            labels=labels
-                        )
-                        val_loss += outputs.loss.item()
-                        
-                        predictions = torch.argmax(outputs.logits, dim=-1)
-                        correct += (predictions == labels).sum().item()
-                        total += labels.size(0)
-                
-                val_loss = val_loss / len(val_loader)
-                accuracy = correct / total
-                print(f"Validation Loss: {val_loss:.4f}, Accuracy: {accuracy:.4f}")
-                
-                self.model.train()
-    
     def zero_shot_classify(
         self,
         texts: Union[str, List[str]],
@@ -183,7 +80,7 @@ class ThaiTextClassifier(TransformerBase):
         hypothesis_template: str = "นี่คือเรื่องเกี่ยวกับ{}",
         multi_label: bool = False,
         **kwargs
-    ) -> List[Dict[str, float]]:
+    ) -> Union[Dict[str, List], List[Dict[str, List]]]:
         """Zero-shot classification using natural language inference
         
         Args:
@@ -194,32 +91,37 @@ class ThaiTextClassifier(TransformerBase):
             **kwargs: Additional arguments for encoding
             
         Returns:
-            List of dictionaries containing classification probabilities
+            Dictionary or list of dictionaries containing classification results
         """
-        from transformers import pipeline
-        
         classifier = pipeline(
             "zero-shot-classification",
-            model="airesearch/wangchanberta-base-att-spm-uncased",
+            model=self.model,
+            tokenizer=self.tokenizer,
             device=0 if torch.cuda.is_available() else -1
         )
         
-        results = classifier(
-            texts,
-            candidate_labels,
-            hypothesis_template=hypothesis_template,
-            multi_label=multi_label
-        )
-        
         if isinstance(texts, str):
+            result = classifier(
+                texts,
+                candidate_labels,
+                hypothesis_template=hypothesis_template,
+                multi_label=multi_label
+            )
             return {
-                "labels": results["labels"],
-                "scores": results["scores"]
+                "labels": result["labels"],
+                "scores": result["scores"]
             }
-        return [
-            {
-                "labels": r["labels"],
-                "scores": r["scores"]
-            }
-            for r in results
-        ] 
+            
+        results = []
+        for text in texts:
+            result = classifier(
+                text,
+                candidate_labels,
+                hypothesis_template=hypothesis_template,
+                multi_label=multi_label
+            )
+            results.append({
+                "labels": result["labels"],
+                "scores": result["scores"]
+            })
+        return results
