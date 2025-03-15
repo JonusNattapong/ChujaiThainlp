@@ -27,6 +27,17 @@ pydantic>=2.0.0
 httpx>=0.24.0
 tenacity>=8.2.0
 cryptography>=41.0.0
+bcrypt>=4.0.1
+cffi>=1.15.1
+pycparser>=2.21
+pyOpenSSL>=23.2.0
+pycryptodome>=3.19.0
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+pyasn1>=0.5.0
+asn1crypto>=1.5.1
+certifi>=2023.7.22
+six>=1.16.0
 speechbrain
 pyannote.audio
 noisereduce
