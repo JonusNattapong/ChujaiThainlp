@@ -4,14 +4,14 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    name="thainlp",
-    version="0.3.0",
+    name="chujaithainlp",
+    version="0.4.0",
     author="Zombitx64",
     author_email="zombitx64@gmail.com",
     description="Thai Natural Language Processing Library with Advanced Deep Learning Support",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/zombitx64/thainlp",
+    url="https://github.com/zombitx64/ChujaiThainlp",
     packages=find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",
@@ -30,6 +30,8 @@ setup(
         "tqdm>=4.65.0",
         "requests>=2.31.0",
         "pyyaml>=6.0.1",
+        "scikit-learn>=1.0.0",
+        "pythainlp>=3.1.0",
     ],
     extras_require={
         "full": [
@@ -44,9 +46,6 @@ setup(
             "pandas>=2.0.0",
             "scikit-learn>=1.0.0",
             "nltk>=3.8.0",
-        ],
-        "pythainlp": [
-            "pythainlp>=3.1.0",
         ],
         "transformers": [
             "torch>=2.0.0",
