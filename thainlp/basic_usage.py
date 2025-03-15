@@ -1,93 +1,130 @@
 """
-Basic usage examples for ThaiNLP library.
+Basic usage examples for ThaiNLP library
 """
-import sys
-import os
-
-# Add parent directory to the Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-from thainlp.extensions.advanced_nlp import (
-    ThaiTextAnalyzer,
-    ThaiSentimentAnalyzer,
-    ThaiNamedEntityRecognition,
-    TopicModeling,
-    EmotionDetector
-)
 
 def tokenization_example():
-    text = "การเดินทางไปท่องเที่ยวที่จังหวัดเชียงใหม่ในฤดูหนาวเป็นประสบการณ์ที่น่าจดจำ"
-    print("Original text:", text)
+    """Tokenization example"""
+    from thainlp import tokenize
+    
+    text = "ผมชอบกินข้าวที่ร้านอาหารไทย"
+    tokens = tokenize(text)
+    print(tokens)  # ['ผม', 'ชอบ', 'กิน', 'ข้าว', 'ที่', 'ร้าน', 'อาหาร', 'ไทย']
 
-    analyzer = ThaiTextAnalyzer()
-    tokens = analyzer.tokenize(text)
-    print("Tokenized:", tokens)
-
-def pos_tagging_example():
-    text = "นักวิจัยกำลังศึกษาปรากฏการณ์ทางธรรมชาติที่ซับซ้อน"
-    print("Original text:", text)
-
-    analyzer = ThaiTextAnalyzer()
-    pos_tags = analyzer.pos_tag(text)
-    print("POS tags:", pos_tags)
+def sentiment_example():
+    """Sentiment analysis example"""
+    from thainlp import analyze_sentiment
+    
+    text = "วันนี้อากาศดีมากๆ ฉันมีความสุขมาก"
+    score, label = analyze_sentiment(text)
+    print(f"Sentiment: {label} (score: {score})")  # Sentiment: positive (score: 0.75)
 
 def ner_example():
-    text = "นายสมชาย ใจดี เป็นอาจารย์ที่มหาวิทยาลัยเชียงใหม่"
-    print("Original text:", text)
-
-    ner = ThaiNamedEntityRecognition()
-    entities = ner.extract_entities(text)
-    print("Named Entities:", entities)
-
-def sentiment_analysis_example():
-    texts = [
-        "ฉันรักประเทศไทยมาก สวยงามเสมอ",
-        "วันนี้รู้สึกเศร้า เสียใจมาก",
-        "วันนี้อากาศดี ฉันไปทำงาน",
-    ]
-
-    analyzer = ThaiSentimentAnalyzer()
-    for text in texts:
-        result = analyzer.analyze_sentiment(text)
-        print(f"Text: {text}")
-        print(f"Sentiment: {result['sentiment']}, Score: {result['score']:.2f}")
-        print("---")
-
-def topic_modeling_example():
-    texts = [
-        "การพัฒนาเทคโนโลยีปัญญาประดิษฐ์กำลังเปลี่ยนแปลงโลก",
-        "นักวิทยาศาสตร์ค้นพบดาวเคราะห์ดวงใหม่",
-        "ตลาดหุ้นทั่วโลกปรับตัวขึ้นหลังจากข่าวดีทางเศรษฐกิจ"
-    ]
+    """Named Entity Recognition example"""
+    from thainlp import extract_entities
     
-    topic_model = TopicModeling()
-    topics = topic_model.extract_topics(texts)
-    print("Topics:", topics)
+    text = "คุณสมชายอาศัยอยู่ที่กรุงเทพมหานคร"
+    entities = extract_entities(text)
+    print(entities)  # [('PERSON', 'คุณสมชาย'), ('LOCATION', 'กรุงเทพมหานคร')]
 
-def emotion_detection_example():
-    texts = [
-        "ฉันมีความสุขมากที่ได้เจอเพื่อนเก่า",
-        "เสียใจจังที่สอบไม่ผ่าน",
-        "โกรธมากที่เขาไม่รักษาสัญญา"
-    ]
+def fill_mask_example():
+    """Fill-Mask example"""
+    from thainlp.models.fill_mask import ThaiFillMask
     
-    detector = EmotionDetector()
-    for text in texts:
-        emotions = detector.detect_emotion(text)
-        print(f"Text: {text}")
-        print(f"Emotions: {emotions}")
-        print("---")
+    # Initialize model
+    fill_mask = ThaiFillMask()
+    
+    # Simple mask filling
+    text = "ผมชอบกิน[MASK]ที่ร้านอาหารไทย"
+    results = fill_mask.fill_mask(text, top_k=3)
+    print("Fill-Mask results:")
+    for preds in results:
+        for pred in preds:
+            print(f"Text: {pred['text']}, Score: {pred.get('score', 'N/A')}")
+    
+    # Generate masked text
+    text = "ประเทศไทยมีประชากรประมาณ 70 ล้านคน"
+    masked = fill_mask.generate_masks(text, mask_ratio=0.2)
+    print(f"\nGenerated masked text: {masked}")
+    
+    # Batch processing
+    texts = [
+        "วันนี้[MASK]ดีมาก",
+        "ผม[MASK]ไปโรงเรียน"
+    ]
+    results = fill_mask.fill_mask_batch(texts, top_k=2)
+    print("\nBatch Fill-Mask results:")
+    for text, preds in zip(texts, results):
+        print(f"\nInput: {text}")
+        for mask_preds in preds:
+            for pred in mask_preds:
+                print(f"Text: {pred['text']}, Score: {pred.get('score', 'N/A')}")
+
+def sentence_similarity_example():
+    """Sentence Similarity example"""
+    from thainlp.similarity.sentence_similarity import ThaiSentenceSimilarity
+    
+    # Initialize similarity model
+    sim_model = ThaiSentenceSimilarity()
+    
+    # Compare two sentences
+    text1 = "ผมชอบกินข้าวผัด"
+    text2 = "ฉันชอบทานข้าวผัด"
+    similarity = sim_model.compute_similarity(text1, text2)
+    print(f"\nSimilarity score: {similarity:.2f}")
+    
+    # Find similar sentences
+    query = "อาหารไทยอร่อย"
+    candidates = [
+        "อาหารไทยรสชาติดี",
+        "ประเทศไทยสวยงาม",
+        "อาหารญี่ปุ่นอร่อย"
+    ]
+    results = sim_model.find_most_similar(query, candidates, top_k=2)
+    print("\nMost similar sentences:")
+    for result in results:
+        print(f"Text: {result['text']}, Score: {result['similarity']:.2f}")
+    
+    # Create similarity matrix
+    texts = [
+        "ผมชอบกินข้าวผัด",
+        "ฉันชอบทานข้าวผัด",
+        "อาหารไทยอร่อยมาก"
+    ]
+    matrix = sim_model.compute_similarity_matrix(texts)
+    print("\nSimilarity matrix:")
+    print(matrix)
+    
+    # Cluster similar texts
+    texts = [
+        "ผมชอบกินข้าวผัด",
+        "ฉันชอบทานข้าวผัด",
+        "อาหารไทยอร่อยมาก",
+        "ประเทศไทยสวยงาม",
+        "เมืองไทยมีสถานที่ท่องเที่ยวสวยๆ"
+    ]
+    clusters = sim_model.cluster_texts(texts, n_clusters=2)
+    print("\nText clusters:")
+    for label, cluster_texts in clusters['clusters'].items():
+        print(f"\nCluster {label}:")
+        for text in cluster_texts:
+            print(f"- {text}")
+
+def main():
+    """Run all examples"""
+    print("\n=== Tokenization Example ===")
+    tokenization_example()
+    
+    print("\n=== Sentiment Analysis Example ===")
+    sentiment_example()
+    
+    print("\n=== Named Entity Recognition Example ===")
+    ner_example()
+    
+    print("\n=== Fill-Mask Example ===")
+    fill_mask_example()
+    
+    print("\n=== Sentence Similarity Example ===")
+    sentence_similarity_example()
 
 if __name__ == "__main__":
-    print("=== Tokenization Example ===")
-    tokenization_example()
-    print("\n=== POS Tagging Example ===")
-    pos_tagging_example()
-    print("\n=== NER Example ===")
-    ner_example()
-    print("\n=== Sentiment Analysis Example ===")
-    sentiment_analysis_example()
-    print("\n=== Topic Modeling Example ===")
-    topic_modeling_example()
-    print("\n=== Emotion Detection Example ===")
-    emotion_detection_example()
+    main()
