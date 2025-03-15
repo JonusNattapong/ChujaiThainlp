@@ -92,14 +92,9 @@ class ThaiTranslator(TransformerBase):
         Returns:
             Model name
         """
-        if source_lang == 'th' and target_lang == 'en':
-            return "Helsinki-NLP/opus-mt-th-en"
-        elif source_lang == 'en' and target_lang == 'th':
-            return "Helsinki-NLP/opus-mt-en-th"
-        else:
-            # Use M2M100 for other language pairs
-            return "facebook/m2m100_418M"
-            
+        # Use M2M100 for all language pairs as a fallback
+        return "facebook/m2m100_418M"
+
     def _encode_context(self, text: str) -> torch.Tensor:
         """Encode text for context matching
         
