@@ -5,6 +5,7 @@ Thai language utilities
 from typing import List, Dict, Set, Tuple, Optional, Union
 import re
 import warnings
+import datetime
 
 try:
     import pythainlp
