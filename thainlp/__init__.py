@@ -5,11 +5,11 @@ ThaiNLP: Thai Natural Language Processing Library
 __version__ = "0.2.0"
 
 # Import tokenization
-from thainlp.extensions.advanced_nlp import ThaiTextAnalyzer
-tokenize = word_tokenize  # Using PyThaiNLP's word_tokenize directly
+from thainlp.tokenize import word_tokenize
+tokenize = word_tokenize  # Main tokenization function
 
 # Import POS tagging
-pos_tag = None  # TODO: Implement POS tagging
+from thainlp.tag import pos_tag
 
 # Import NER
 from thainlp.extensions.advanced_nlp import ThaiNamedEntityRecognition
