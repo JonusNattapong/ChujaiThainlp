@@ -12,9 +12,23 @@ from transformers import (
     PreTrainedTokenizer
 )
 from sentence_transformers import SentenceTransformer
-from pythainlp.tokenize import word_tokenize
-from pythainlp.tag import pos_tag
-from pythainlp.util import thai_characters, thai_digits
+import warnings
+try:
+    import pythainlp
+    from pythainlp.tokenize import word_tokenize
+    from pythainlp.tag import pos_tag
+    from pythainlp.util import thai_characters, thai_digits
+    PYTHAINLP_AVAILABLE = True
+except ImportError:
+    PYTHAINLP_AVAILABLE = False
+    warnings.warn("PyThaiNLP not found. Using simplified feature extraction.")
+
+try:
+    from ..sentiment.lexicon_based import analyze_sentiment
+    SENTIMENT_AVAILABLE = True
+except ImportError:
+    SENTIMENT_AVAILABLE = False
+    warnings.warn("Sentiment analysis module not found. Using basic word matching.")
 from sklearn.feature_extraction.text import TfidfVectorizer
 from ..core.transformers import TransformerBase
 
@@ -201,8 +215,22 @@ class ThaiFeatureExtractor(TransformerBase):
         for feature in self.domain_features:
             if feature == "sentiment":
                 # Add sentiment analysis
-                from pythainlp.sentiment import sentiment
-                features['sentiment_score'] = sentiment(text)
+                if SENTIMENT_AVAILABLE:
+                    features['sentiment_score'] = analyze_sentiment(text)
+                else:
+                    # Simple fallback sentiment based on positive/negative word presence
+                    positive_words = {'ดี', 'เยี่ยม', 'สุข', 'รัก', 'ชอบ', 'สนุก', 'ชนะ'}
+                    negative_words = {'แย่', 'เสีย', 'เศร้า', 'โกรธ', 'เกลียด', 'ทุกข์', 'แพ้'}
+                    
+                    tokens = text.split() if callable(word_tokenize) else text.split()
+                    pos_count = sum(1 for t in tokens if t in positive_words)
+                    neg_count = sum(1 for t in tokens if t in negative_words)
+                    total = pos_count + neg_count
+                    
+                    if total > 0:
+                        features['sentiment_score'] = (pos_count - neg_count) / total
+                    else:
+                        features['sentiment_score'] = 0.0
                 
             elif feature == "readability":
                 # Add readability metrics
@@ -400,4 +428,4 @@ class ThaiFeatureExtractor(TransformerBase):
         # Sort by score
         keywords.sort(key=lambda x: x['score'], reverse=True)
         
-        return keywords[:top_k] 
+        return keywords[:top_k]
