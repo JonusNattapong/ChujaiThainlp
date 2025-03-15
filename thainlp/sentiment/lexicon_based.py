@@ -1,188 +1,99 @@
 """
-Lexicon-based Sentiment Analysis for Thai Text
+Lexicon-based sentiment analysis for Thai text.
 """
+from typing import Dict, Set, Union, Optional
+import os
+import json
 
-from typing import List, Dict, Tuple
-from collections import defaultdict
+# Default sentiment lexicons
+DEFAULT_POSITIVE_WORDS = {
+    'ดี', 'เยี่ยม', 'สุข', 'รัก', 'ชอบ', 'สนุก', 'ชนะ',
+    'ยอด', 'เก่ง', 'สวย', 'งาม', 'ประทับใจ', 'ยิ้ม',
+    'สำเร็จ', 'พอใจ', 'สบาย', 'สดใส', 'มั่นใจ'
+}
 
-class ThaiSentimentAnalyzer:
-    def __init__(self):
-        """Initialize ThaiSentimentAnalyzer with sentiment dictionaries"""
-        self.positive_words = {
-            'ดี', 'สวย', 'เยี่ยม', 'ยอดเยี่ยม', 'สุดยอด', 'ดีมาก',
-            'น่ารัก', 'สวยงาม', 'น่าชื่นชม', 'น่าชื่นใจ', 'น่าภูมิใจ',
-            'สนุก', 'เพลิดเพลิน', 'น่าสนใจ', 'น่าตื่นเต้น',
-            'อร่อย', 'หอม', 'สด', 'สะอาด', 'สดใส',
-            'รัก', 'ชอบ', 'ชื่นชอบ', 'ชื่นชม', 'ชื่นใจ',
-            'สุข', 'สุขใจ', 'สบาย', 'สบายใจ', 'สดชื่น',
-            'เก่ง', 'ฉลาด', 'เฉลียวฉลาด', 'มีปัญญา',
-            'ขอบคุณ', 'ขอบใจ', 'ขอบพระคุณ',
-        }
-        
-        self.negative_words = {
-            'แย่', 'ไม่ดี', 'เลว', 'ชั่ว', 'โหดร้าย',
-            'น่าเกลียด', 'น่าขยะแขยง', 'น่าอับอาย',
-            'น่าเบื่อ', 'น่าเหงา', 'น่าเศร้า', 'น่าหดหู่',
-            'โกรธ', 'โมโห', 'หงุดหงิด', 'รำคาญ',
-            'เจ็บ', 'ปวด', 'เมื่อย', 'เหนื่อย', 'อ่อนเพลีย',
-            'กลัว', 'หวาดกลัว', 'หวาดหวั่น', 'กังวล',
-            'เสีย', 'หาย', 'ขาด', 'หายไป',
-            'ผิด', 'ผิดพลาด', 'ผิดปกติ',
-        }
-        
-        self.negation_words = {
-            'ไม่', 'ไม่มี', 'ไม่ได้', 'อย่า', 'ห้าม',
-            'ไม่มีทาง', 'ไม่มีโอกาส', 'ไม่มีสิทธิ์',
-        }
-        
-        self.intensifier_words = {
-            'มาก', 'มากๆ', 'มากมาย', 'ที่สุด',
-            'เกินไป', 'เกิน', 'มากเกินไป',
-            'แทบ', 'เกือบ', 'ใกล้เคียง',
-        }
-        
-        self.diminisher_words = {
-            'น้อย', 'น้อยๆ', 'นิดหน่อย',
-            'เล็กน้อย', 'เล็กๆ', 'นิดเดียว',
-        }
-        
-    def _is_thai(self, char: str) -> bool:
-        """Check if character is Thai"""
-        return '\u0E00' <= char <= '\u0E7F'
-        
-    def _is_thai_word(self, word: str) -> bool:
-        """Check if word contains Thai characters"""
-        return any(self._is_thai(char) for char in word)
-        
-    def _get_word_sentiment(self, word: str) -> float:
-        """
-        Get sentiment score for a word
+DEFAULT_NEGATIVE_WORDS = {
+    'แย่', 'เสีย', 'เศร้า', 'โกรธ', 'เกลียด', 'ทุกข์', 'แพ้',
+    'ผิด', 'กลัว', 'กังวล', 'เจ็บ', 'ปวด', 'ร้องไห้',
+    'ล้มเหลว', 'ผิดหวัง', 'เหนื่อย', 'ท้อ', 'สิ้นหวัง'
+}
+
+class LexiconSentimentAnalyzer:
+    """Lexicon-based sentiment analyzer for Thai text"""
+
+    def __init__(
+        self,
+        lexicon_path: Optional[str] = None,
+        positive_words: Optional[Set[str]] = None,
+        negative_words: Optional[Set[str]] = None
+    ):
+        """Initialize sentiment analyzer
         
         Args:
-            word (str): Input word
-            
-        Returns:
-            float: Sentiment score (-1.0 to 1.0)
+            lexicon_path: Path to lexicon JSON file
+            positive_words: Set of positive words
+            negative_words: Set of negative words
         """
-        if word in self.positive_words:
-            return 1.0
-        elif word in self.negative_words:
-            return -1.0
-        return 0.0
+        self.positive_words = positive_words or DEFAULT_POSITIVE_WORDS.copy()
+        self.negative_words = negative_words or DEFAULT_NEGATIVE_WORDS.copy()
         
-    def _apply_modifiers(self, words: List[str], start_idx: int) -> float:
-        """
-        Apply negation and intensifier/diminisher modifiers
-        
-        Args:
-            words (List[str]): List of words
-            start_idx (int): Starting index
-            
-        Returns:
-            float: Modified sentiment score
-        """
-        score = 0.0
-        i = start_idx
-        
-        while i < len(words):
-            word = words[i]
-            
-            # Check for negation
-            if word in self.negation_words:
-                if i + 1 < len(words):
-                    next_word = words[i + 1]
-                    score = -self._get_word_sentiment(next_word)
-                    i += 2
-                    continue
-                    
-            # Check for intensifier
-            if word in self.intensifier_words:
-                if i > 0:
-                    prev_word = words[i - 1]
-                    score = self._get_word_sentiment(prev_word) * 1.5
-                    
-            # Check for diminisher
-            if word in self.diminisher_words:
-                if i > 0:
-                    prev_word = words[i - 1]
-                    score = self._get_word_sentiment(prev_word) * 0.5
-                    
-            # Get base sentiment
-            if self._is_thai_word(word):
-                score = self._get_word_sentiment(word)
+        # Load custom lexicon if provided
+        if lexicon_path and os.path.exists(lexicon_path):
+            with open(lexicon_path, 'r', encoding='utf-8') as f:
+                lexicon = json.load(f)
+                if 'positive' in lexicon:
+                    self.positive_words.update(lexicon['positive'])
+                if 'negative' in lexicon:
+                    self.negative_words.update(lexicon['negative'])
                 
-            i += 1
-            
-        return score
-        
-    def analyze(self, text: str) -> Tuple[float, str, Dict[str, List[str]]]:
-        """
-        Analyze sentiment of Thai text
+    def analyze(self, text: str) -> Dict[str, Union[float, str]]:
+        """Analyze sentiment of text
         
         Args:
-            text (str): Input text
+            text: Input text
             
         Returns:
-            Tuple[float, str, Dict[str, List[str]]]: (score, label, categorized_words)
+            Dictionary with sentiment score and polarity
         """
-        # Split text into words
+        # Tokenize into words (simple space-based for now)
         words = text.split()
         
-        # Initialize result
-        score = 0.0
-        categorized_words = {
-            'positive': [],
-            'negative': [],
-            'neutral': []
+        # Count sentiment words
+        pos_count = sum(1 for word in words if word in self.positive_words)
+        neg_count = sum(1 for word in words if word in self.negative_words)
+        total = pos_count + neg_count
+        
+        # Calculate sentiment score
+        if total > 0:
+            score = (pos_count - neg_count) / total
+        else:
+            score = 0.0
+            
+        # Determine polarity
+        if score > 0.1:
+            polarity = 'positive'
+        elif score < -0.1:
+            polarity = 'negative'
+        else:
+            polarity = 'neutral'
+            
+        return {
+            'score': score,
+            'polarity': polarity,
+            'positive_words': pos_count,
+            'negative_words': neg_count
         }
         
-        # Process each word
-        i = 0
-        while i < len(words):
-            word = words[i]
-            
-            if self._is_thai_word(word):
-                # Get sentiment with modifiers
-                word_score = self._apply_modifiers(words, i)
-                score += word_score
-                
-                # Categorize word
-                if word_score > 0:
-                    categorized_words['positive'].append(word)
-                elif word_score < 0:
-                    categorized_words['negative'].append(word)
-                else:
-                    categorized_words['neutral'].append(word)
-                    
-            i += 1
-            
-        # Normalize score
-        if len(categorized_words['positive']) + len(categorized_words['negative']) > 0:
-            score = score / (len(categorized_words['positive']) + len(categorized_words['negative']))
-            
-        # Determine label
-        if score > 0.5:
-            label = 'very_positive'
-        elif score > 0:
-            label = 'positive'
-        elif score < -0.5:
-            label = 'very_negative'
-        elif score < 0:
-            label = 'negative'
-        else:
-            label = 'neutral'
-            
-        return score, label, categorized_words
+# Create default analyzer instance
+_default_analyzer = LexiconSentimentAnalyzer()
 
-def analyze_sentiment(text: str) -> Tuple[float, str, Dict[str, List[str]]]:
-    """
-    Analyze sentiment of Thai text
+def analyze_sentiment(text: str) -> float:
+    """Analyze sentiment of text using default analyzer
     
     Args:
-        text (str): Input text
+        text: Input text
         
     Returns:
-        Tuple[float, str, Dict[str, List[str]]]: (score, label, categorized_words)
+        Sentiment score between -1 (negative) and 1 (positive)
     """
-    analyzer = ThaiSentimentAnalyzer()
-    return analyzer.analyze(text) 
+    return _default_analyzer.analyze(text)['score']
