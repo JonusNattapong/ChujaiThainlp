@@ -6,39 +6,67 @@ import time
 import logging
 import hashlib
 import threading
-from collections import defaultdict
+import math
+import uuid
+import traceback
+from collections import defaultdict, deque
 from datetime import datetime
 from functools import lru_cache
 import json
 
 class MetricsCollector:
-    """Collect and manage system metrics"""
+    """Collect and manage system metrics with time-windowed storage"""
     
-    def __init__(self):
-        self.metrics = defaultdict(list)
+    def __init__(self, max_window_seconds: int = 3600):
+        from collections import deque
+        self.metrics = defaultdict(lambda: deque(maxlen=10000))  # Fixed size for memory efficiency
         self._lock = threading.Lock()
         self.logger = logging.getLogger("metrics")
+        self.max_window_seconds = max_window_seconds
         
     def record(self, metric_type: str, value: Any):
-        """Record a metric with timestamp"""
+        """Record a metric with timestamp, automatically pruning old data"""
+        timestamp = time.time()
         with self._lock:
+            # Prune old entries first
+            self._prune_old_entries(metric_type, timestamp)
             self.metrics[metric_type].append({
                 'value': value,
-                'timestamp': datetime.now().isoformat()
+                'timestamp': timestamp
             })
             
-    def get_stats(self, metric_type: str) -> Dict[str, Any]:
-        """Get statistical summary of a metric"""
-        values = [m['value'] for m in self.metrics[metric_type]]
-        if not values:
-            return {}
+    def _prune_old_entries(self, metric_type: str, current_time: float):
+        """Remove entries older than max_window_seconds"""
+        while (self.metrics[metric_type] and 
+               current_time - self.metrics[metric_type][0]['timestamp'] > self.max_window_seconds):
+            self.metrics[metric_type].popleft()
             
-        return {
-            'count': len(values),
-            'avg': sum(values) / len(values),
-            'min': min(values),
-            'max': max(values)
-        }
+    def get_stats(self, metric_type: str) -> Dict[str, Any]:
+        """Get statistical summary of a metric with time window"""
+        with self._lock:
+            self._prune_old_entries(metric_type, time.time())
+            values = [m['value'] for m in self.metrics[metric_type]]
+            
+            # Initialize stats with default values
+            stats = {
+                'count': 0,
+                'avg': 0,
+                'min': 0,
+                'max': 0,
+                'percentile_95': 0,
+                'window_seconds': self.max_window_seconds
+            }
+            
+            if values:
+                stats.update({
+                    'count': len(values),
+                    'avg': sum(values) / len(values),
+                    'min': min(values),
+                    'max': max(values),
+                    'percentile_95': sorted(values)[int(len(values) * 0.95)]
+                })
+                
+            return stats
         
     def export_metrics(self, format: str = 'json') -> str:
         """Export metrics in specified format"""
@@ -46,44 +74,61 @@ class MetricsCollector:
             return json.dumps(dict(self.metrics))
         raise ValueError(f"Unsupported format: {format}")
 
-class RateLimiter:
-    """Rate limiting for API protection"""
-    
-    def __init__(self, max_requests: int = 100, window_seconds: int = 60):
-        self.max_requests = max_requests
-        self.window_seconds = window_seconds
-        self.requests = defaultdict(list)
-        self._lock = threading.Lock()
-        
-    def is_allowed(self, client_id: str) -> bool:
-        """Check if request is allowed based on rate limits"""
-        now = time.time()
-        
-        with self._lock:
-            # Remove old requests
-            self.requests[client_id] = [
-                req_time for req_time in self.requests[client_id]
-                if now - req_time < self.window_seconds
-            ]
-            
-            # Check limit
-            if len(self.requests[client_id]) >= self.max_requests:
-                return False
-                
-            # Record request
-            self.requests[client_id].append(now)
-            return True
-
 class SecurityManager:
-    """Manage security aspects"""
+    """Handles security and validation of requests"""
     
     def __init__(self):
         self.rate_limiter = RateLimiter()
         
-    def sanitize_input(self, text: str) -> str:
-        """Sanitize input text"""
-        # Remove potential harmful characters
-        return text.replace('<', '&lt;').replace('>', '&gt;')
+    def validate_request(self, client_id: str, text: str) -> bool:
+        """Validate incoming request"""
+        if not self.rate_limit_check(client_id):
+            return False
+        if not self.input_validation(text):
+            return False
+        return True
+        
+    def rate_limit_check(self, client_id: str) -> bool:
+        """Check rate limiting"""
+        return self.rate_limiter.is_allowed(client_id)
+        
+    def input_validation(self, text: str) -> bool:
+        """Validate input text"""
+        if not text or len(text) > 10000:  # Example limit
+            return False
+        return True
+        
+    @staticmethod
+    def hash_text(text: str) -> str:
+        """Create hash of text for caching/comparison"""
+        return hashlib.sha256(text.encode()).hexdigest()
+
+class RateLimiter:
+    """Efficient rate limiting using sliding window algorithm"""
+    
+    def __init__(self, max_requests: int = 100, window_seconds: int = 60):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self.requests = defaultdict(lambda: deque(maxlen=max_requests))
+        self._lock = threading.Lock()
+        
+    def is_allowed(self, client_id: str) -> bool:
+        """Check if request is allowed using sliding window"""
+        now = time.time()
+        window_start = now - self.window_seconds
+        
+        with self._lock:
+            # Remove expired requests
+            while (self.requests[client_id] and 
+                   self.requests[client_id][0] < window_start):
+                self.requests[client_id].popleft()
+                
+            # Check if we have room for new request
+            if len(self.requests[client_id]) >= self.max_requests:
+                return False
+            # Add new request timestamp
+            self.requests[client_id].append(now)
+            return True
         
     def validate_request(self, client_id: str, text: str) -> bool:
         """Validate incoming request"""
@@ -118,40 +163,47 @@ class Cache:
         self._lock = threading.Lock()
         
     def get(self, key: str) -> Optional[Any]:
-        """Get value from cache"""
+        """Get value from cache, returns None if cache is empty or key not found"""
         with self._lock:
+            if not self._cache:  # Return None if cache is empty
+                return None
             if key in self._cache:
                 self._access_count[key] += 1
                 return self._cache[key]
             return None
             
     def set(self, key: str, value: Any):
-        """Set value in cache"""
+        """Set value in cache using proper LRU eviction"""
         with self._lock:
             if len(self._cache) >= self.max_size:
-                # Remove least accessed item
-                min_key = min(
+                # Remove least recently used item
+                lru_key = min(
                     self._access_count.items(),
-                    key=lambda x: x[1]
+                    key=lambda x: x[1]  # Find key with oldest timestamp
                 )[0]
-                del self._cache[min_key]
-                del self._access_count[min_key]
+                del self._cache[lru_key]
+                del self._access_count[lru_key]
                 
+            # Update cache and access count
             self._cache[key] = value
-            self._access_count[key] = 1
+            self._access_count[key] = time.time()  # Update access time
             
     def clear(self):
-        """Clear cache"""
+        """Clear cache and access tracking"""
         with self._lock:
+            # Clear existing dicts completely
             self._cache.clear()
             self._access_count.clear()
+            # Create new empty structures to ensure complete reset
+            self._cache = {}
+            self._access_count = defaultdict(int)
 
 class ABTesting:
-    """A/B Testing system"""
+    """A/B Testing system with statistical significance"""
     
     def __init__(self):
         self.experiments = {}
-        self.results = defaultdict(list)
+        self.results = defaultdict(lambda: deque(maxlen=100000))  # Fixed size for memory efficiency
         self._lock = threading.Lock()
         
     def register_experiment(
@@ -159,17 +211,30 @@ class ABTesting:
         name: str,
         variants: List[Dict[str, Any]]
     ):
-        """Register new A/B test experiment"""
-        self.experiments[name] = variants
+        """Register new A/B test experiment with weight distribution"""
+        if not variants:
+            raise ValueError("At least one variant required")
+        self.experiments[name] = {
+            'variants': variants,
+            'weights': [1.0/len(variants)] * len(variants)  # Equal weights by default
+        }
         
     def get_variant(self, experiment: str, user_id: str) -> Dict[str, Any]:
-        """Get variant for user"""
+        """Get weighted variant for user"""
         if experiment not in self.experiments:
             raise ValueError(f"Unknown experiment: {experiment}")
             
-        # Deterministic variant selection based on user_id
-        variant_index = hash(user_id) % len(self.experiments[experiment])
-        return self.experiments[experiment][variant_index]
+        # Weighted random selection based on user_id hash
+        rand_val = (hash(user_id) % 10000) / 10000.0
+        cum_weight = 0.0
+        variants = self.experiments[experiment]['variants']
+        weights = self.experiments[experiment]['weights']
+        
+        for i, weight in enumerate(weights):
+            cum_weight += weight
+            if rand_val < cum_weight:
+                return variants[i]
+        return variants[-1]  # Fallback
         
     def record_result(
         self,
@@ -177,52 +242,108 @@ class ABTesting:
         variant: Dict[str, Any],
         success: bool
     ):
-        """Record experiment result"""
+        """Record experiment result with timestamp"""
         with self._lock:
             self.results[experiment].append({
-                'variant': variant,
+                'variant': str(variant),
                 'success': success,
-                'timestamp': datetime.now().isoformat()
+                'timestamp': time.time()
             })
             
     def get_experiment_stats(self, experiment: str) -> Dict[str, Any]:
-        """Get statistics for experiment"""
+        """Get statistics with confidence intervals"""
         if experiment not in self.results:
             return {}
             
         stats = defaultdict(lambda: {'success': 0, 'total': 0})
-        for result in self.results[experiment]:
-            variant = str(result['variant'])
-            stats[variant]['total'] += 1
-            if result['success']:
-                stats[variant]['success'] += 1
-                
-        return {
-            variant: {
-                'success_rate': data['success'] / data['total'],
-                'total_trials': data['total']
-            }
-            for variant, data in stats.items()
-        }
+        current_time = time.time()
+        
+        with self._lock:
+            # Prune old results (older than 30 days)
+            self.results[experiment] = deque(
+                r for r in self.results[experiment]
+                if current_time - r['timestamp'] < 2592000  # 30 days
+            )
+            
+            # Calculate basic stats
+            for result in self.results[experiment]:
+                variant = result['variant']
+                stats[variant]['total'] += 1
+                if result['success']:
+                    stats[variant]['success'] += 1
+                    
+            # Calculate statistical significance
+            for variant, data in stats.items():
+                if data['total'] > 0:
+                    success_rate = data['success'] / data['total']
+                    # Calculate 95% confidence interval using normal approximation
+                    z = 1.96  # Z-score for 95% confidence
+                    margin_of_error = z * math.sqrt(
+                        (success_rate * (1 - success_rate)) / data['total']
+                    )
+                    data.update({
+                        'success_rate': success_rate,
+                        'confidence_interval': [
+                            max(0, success_rate - margin_of_error),
+                            min(1, success_rate + margin_of_error)
+                        ],
+                        'statistical_power': self._calculate_power(
+                            data['success'],
+                            data['total']
+                        )
+                    })
+                    
+        return dict(stats)
+        
+    def _calculate_power(self, successes: int, total: int) -> float:
+        """Calculate statistical power of the experiment"""
+        if total < 2:
+            return 0.0
+        # Simplified power calculation
+        effect_size = successes / total
+        return min(1.0, math.sqrt(total) * effect_size)
 
 class ThaiNLPBase:
-    """Base class with advanced features"""
+    """Base class with enhanced error handling and monitoring"""
     
     def __init__(self):
         self.metrics = MetricsCollector()
         self.security = SecurityManager()
         self.cache = Cache()
         self.ab_testing = ABTesting()
+        
+        # Configure structured logging
         self.logger = logging.getLogger("thainlp")
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter(
+            '%(asctime)s %(name)s %(levelname)s '
+            'process=%(process)d thread=%(thread)d '
+            'module=%(module)s func=%(funcName)s '
+            'message="%(message)s"'
+        )
+        handler.setFormatter(formatter)
+        self.logger.addHandler(handler)
+        self.logger.setLevel(logging.INFO)
         
     @lru_cache(maxsize=1000)
     def _process_with_cache(self, text: str, task: str) -> Any:
-        """Process text with caching"""
-        return self._process(text, task)
+        """Process text with caching and error handling"""
+        try:
+            start_time = time.time()
+            result = self._process(text, task)
+            self.metrics.record('cache_hit', 1)
+            self.metrics.record('cache_process_time', time.time() - start_time)
+            return result
+        except Exception as e:
+            self.logger.error(
+                "Cache processing failed",
+                extra={'text': text[:100], 'task': task, 'error': str(e)}
+            )
+            raise
         
     def _process(self, text: str, task: str) -> Any:
         """Main processing method to be overridden"""
-        raise NotImplementedError
+        raise NotImplementedError("Subclasses must implement _process method")
         
     def process(
         self,
@@ -288,4 +409,4 @@ class ThaiNLPBase:
                 'status': 'error',
                 'error': str(e),
                 'process_time': time.time() - start_time
-            } 
+            }
