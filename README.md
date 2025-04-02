@@ -17,20 +17,38 @@
 
 ```bash
 # ติดตั้งแบบพื้นฐาน
-pip install thainlp
+pip install ChujaiThainlp==0.4.0
 
-# ติดตั้งพร้อม dependencies สำหรับ transformer models
-pip install thainlp[hf]  # ติดตั้ง transformers, torch, sentencepiece
+# ติดตั้งพร้อม transformer models (WangchanBERTa)
+pip install "ChujaiThainlp[hf]==0.4.0"
+
+# ติดตั้งพร้อม API server
+pip install "ChujaiThainlp[api]==0.4.0"
+
+# ติดตั้งพร้อมระบบ monitoring
+pip install "ChujaiThainlp[monitor]==0.4.0"
+
+# ติดตั้งพร้อมระบบความปลอดภัย
+pip install "ChujaiThainlp[security]==0.4.0"
+
+# ติดตั้งทั้งหมด
+pip install "ChujaiThainlp[hf,api,monitor,security]==0.4.0"
+
+# สำหรับนักพัฒนา
+pip install "ChujaiThainlp[dev,docs]==0.4.0"
 ```
 
 หากต้องการติดตั้งเวอร์ชันล่าสุดจากแหล่งข้อมูลโดยตรง:
 
 ```bash
 # ติดตั้งแบบพื้นฐาน
-pip install git+https://github.com/username/thainlp.git
+git clone https://github.com/username/thainlp.git
+cd thainlp
+pip install -e .
 
-# ติดตั้งพร้อม dependencies สำหรับ transformer models
-pip install "git+https://github.com/username/thainlp.git#egg=thainlp[hf]"
+# ติดตั้งพร้อม dependencies ที่ต้องการ
+pip install -e ".[hf]"  # สำหรับ transformer
+pip install -e ".[dev,docs]"  # สำหรับการพัฒนา
 ```
 
 ## 📖 คู่มือการใช้งาน
