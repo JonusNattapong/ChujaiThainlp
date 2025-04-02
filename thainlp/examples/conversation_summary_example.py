@@ -1,36 +1,33 @@
-from thainlp.summarization import ConversationSummarizer
+"""Example conversation for summarization"""
 
-# ตัวอย่างการใช้งาน
-if __name__ == "__main__":
-    summarizer = ConversationSummarizer(summarization_ratio=0.3)
-    
-    # ตัวอย่างบทสนทนา
-    conversation = """
-    สมชาย: สวัสดีครับ คุณสมหญิง วันนี้เรามาคุยเรื่องโครงการพัฒนา NLP สำหรับภาษาไทยกัน
-    สมหญิง: สวัสดีค่ะ คุณสมชาย ดิฉันได้ศึกษาข้อมูลมาแล้ว คิดว่าเราควรเริ่มจากการพัฒนาระบบตัดคำก่อน
+EXAMPLE_CONVERSATION = """
+    สมชาย: สวัสดีครับคุณสมหญิง เรามาคุยเรื่องการพัฒนา NLP สำหรับภาษาไทยกันดีกว่า
+    สมหญิง: สวัสดีค่ะ ดิฉันคิดว่าเราควรเริ่มจากการทำความเข้าใจพื้นฐานก่อน
     สมชาย: ผมเห็นด้วยครับ การตัดคำเป็นพื้นฐานที่สำคัญ แล้วเราจะใช้ไลบรารีอะไรดีครับ?
-    สมหญิง: ดิฉันคิดว่าเราควรใช้ PyThaiNLP เป็นพื้นฐาน แล้วพัฒนาต่อยอด เพราะมันมีฟังก์ชันพื้นฐานครบถ้วน
+    สมหญิง: ดิฉันคิดว่าเราควรใช้ ThaiNLP เป็นพื้นฐาน แล้วพัฒนาต่อยอด เพราะมันมีฟังก์ชันพื้นฐานครบถ้วน
     สมชาย: เห็นด้วยครับ แล้วเรามีทีมงานกี่คนที่จะช่วยกันพัฒนาโปรเจกต์นี้?
-    สมหญิง: ดิฉันคุยกับฝ่ายบุคคลไว้แล้ว เราจะมีทีมงาน 5 คน เป็นนักพัฒนา 3 คน และนักภาษาศาสตร์ 2 คน
-    สมชาย: เยี่ยมเลยครับ ผมคิดว่าเราควรวางแผนพัฒนาให้เสร็จภายใน 3 เดือนนี้
-    สมหญิง: ค่ะ ดิฉันเห็นด้วย โดยเดือนแรกเราควรทำระบบตัดคำให้เสร็จ เดือนที่สองทำระบบวิเคราะห์
-    สมชาย: และเดือนสุดท้ายเราจะได้ทดสอบและแก้ไขข้อผิดพลาด
-    สมหญิง: ค่ะ ถูกต้อง ดิฉันจะเริ่มเขียนเอกสารโครงการเพื่อนำเสนอผู้บริหาร
-    สมชาย: ขอบคุณมากครับ แล้วจะขอติดต่อกลับมาอีกครั้งเมื่อมีความคืบหน้า
-    """
+    สมหญิง: ตอนนี้เรามีทีมงานหลัก 5 คน และมีนักพัฒนาที่สนใจจะร่วมโปรเจกต์อีกประมาณ 10 คนค่ะ
+    สมชาย: ดีมากครับ ถ้างั้นเรามาวางแผนการพัฒนากันเลยดีไหมครับ?
+    สมหญิง: ได้เลยค่ะ ดิฉันคิดว่าเราควรแบ่งงานเป็นโมดูลๆ เพื่อให้ทุกคนสามารถทำงานคู่ขนานกันได้
+    สมชาย: ครับ ผมจะรับผิดชอบส่วนการตัดคำและวิเคราะห์ไวยากรณ์
+    สมหญิง: ดิฉันจะดูแลส่วนการประมวลผลความหมายและการแปลภาษาค่ะ
+"""
+
+def get_example_conversation():
+    """Get example conversation text"""
+    return EXAMPLE_CONVERSATION
+
+def summarize_example():
+    """Example of using conversation summarizer"""
+    from ..summarization.conversation_summarizer import ConversationSummarizer
     
-    result = summarizer.generate_conversation_summary(conversation)
+    summarizer = ConversationSummarizer()
+    summary = summarizer.summarize(EXAMPLE_CONVERSATION)
     
-    print("สรุปบทสนทนา:")
-    print(result['summary'])
-    
-    print("\nประโยคสำคัญ:")
-    for sentence in result['important_sentences']:
-        print(f"- {sentence}")
-    
-    print("\nหัวข้อสำคัญ:")
-    print(", ".join(result['key_topics']))
-    
-    print("\nสถิติผู้พูด:")
-    for speaker, stats in result['speaker_stats'].items():
-        print(f"- {speaker}: {stats['message_count']} ข้อความ, {stats['questions_asked']} คำถาม")
+    print("Original Conversation:")
+    print(EXAMPLE_CONVERSATION)
+    print("\nSummary:")
+    print(summary)
+
+if __name__ == "__main__":
+    summarize_example()

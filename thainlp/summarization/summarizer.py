@@ -1,330 +1,129 @@
 """
-Advanced Text Summarization for Thai Language
+Thai text summarization
 """
-
-from typing import List, Dict, Union, Optional, Any
-import torch
+from typing import List, Dict, Set, Union
 import numpy as np
-from transformers import (
-    AutoModelForSeq2SeqLM,
-    AutoTokenizer,
-    pipeline,
-    PreTrainedModel,
-    PreTrainedTokenizer
-)
-from pythainlp.tokenize import word_tokenize, sent_tokenize
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-from ..core.transformers import TransformerBase
+from ..tokenization import word_tokenize
 
-class ThaiSummarizer(TransformerBase):
-    """Advanced text summarization for Thai language"""
+def split_sentences(text: str) -> List[str]:
+    """Split Thai text into sentences using basic rules"""
+    sentences = []
+    current = []
     
-    def __init__(
-        self,
-        model_name_or_path: Optional[str] = None,
-        mode: str = "abstractive",
-        max_length: int = 1024,
-        min_length: int = 50,
-        use_cuda: bool = True,
-        **kwargs
-    ):
-        """Initialize summarizer
-        
-        Args:
-            model_name_or_path: Name or path of the model
-            mode: Summarization mode (abstractive or extractive)
-            max_length: Maximum input sequence length
-            min_length: Minimum summary length
-            use_cuda: Whether to use GPU if available
-            **kwargs: Additional arguments for model initialization
-        """
-        if model_name_or_path is None:
-            model_name_or_path = "wangchanberta-base-att-spm-uncased"
-            
-        self.mode = mode
-        self.max_length = max_length
-        self.min_length = min_length
-        
-        super().__init__(
-            model_name_or_path=model_name_or_path,
-            task_type="summarization",
-            **kwargs
-        )
-        
-        # Initialize summarization pipeline for abstractive mode
-        if mode == "abstractive":
-            self.summarization_pipeline = pipeline(
-                "summarization",
-                model=self.model,
-                tokenizer=self.tokenizer,
-                device=0 if use_cuda and torch.cuda.is_available() else -1
-            )
-            
-    def _get_sentence_scores(
-        self,
-        sentences: List[str],
-        top_n: int = 3
-    ) -> List[Dict[str, Any]]:
-        """Score sentences for extractive summarization
-        
-        Args:
-            sentences: List of sentences
-            top_n: Number of top sentences to return
-            
-        Returns:
-            List of sentence scores and metadata
-        """
-        # Create TF-IDF vectors
-        vectorizer = TfidfVectorizer()
-        vectors = vectorizer.fit_transform(sentences)
-        
-        # Calculate sentence similarities
-        similarities = cosine_similarity(vectors)
-        
-        # Calculate sentence scores
-        scores = []
-        for i, sentence in enumerate(sentences):
-            # Score based on similarity with other sentences
-            similarity_score = np.mean(similarities[i])
-            
-            # Score based on position (earlier sentences get higher scores)
-            position_score = 1.0 / (i + 1)
-            
-            # Score based on sentence length
-            length_score = len(word_tokenize(sentence)) / 100
-            
-            # Combine scores
-            total_score = (
-                0.4 * similarity_score +
-                0.3 * position_score +
-                0.3 * (1 - min(1.0, length_score))
-            )
-            
-            scores.append({
-                'sentence': sentence,
-                'score': total_score,
-                'position': i,
-                'similarity': similarity_score
-            })
-            
-        # Sort by score and return top_n
-        scores.sort(key=lambda x: x['score'], reverse=True)
-        return scores[:top_n]
-        
-    def _merge_sentences(
-        self,
-        sentences: List[str],
-        max_length: Optional[int] = None
-    ) -> str:
-        """Merge sentences into coherent text
-        
-        Args:
-            sentences: List of sentences
-            max_length: Maximum length in words
-            
-        Returns:
-            Merged text
-        """
-        if not max_length:
-            return ' '.join(sentences)
-            
-        result = []
-        current_length = 0
-        
-        for sent in sentences:
-            words = word_tokenize(sent)
-            if current_length + len(words) <= max_length:
-                result.append(sent)
-                current_length += len(words)
-            else:
-                break
+    for char in text:
+        current.append(char)
+        if char in {'。', '！', '？', '।', '។', '။', '၏', '?', '!', '.', '\n'}:
+            if current:
+                sentences.append(''.join(current).strip())
+                current = []
                 
-        return ' '.join(result)
+    if current:
+        sentences.append(''.join(current).strip())
         
-    def _clean_generated_summary(self, summary: str) -> str:
-        """Clean and format generated summary
-        
-        Args:
-            summary: Generated summary text
-            
-        Returns:
-            Cleaned summary
-        """
-        # Remove redundant spaces
-        summary = ' '.join(summary.split())
-        
-        # Ensure proper sentence endings
-        if not summary.endswith(('.', '?', '!')):
-            summary += '.'
-            
-        return summary
+    return [s for s in sentences if s]
+
+class ThaiSummarizer:
+    def __init__(self):
+        self.vectorizer = TfidfVectorizer(
+            tokenizer=word_tokenize,
+            stop_words=[]  # Thai stopwords handled by tokenizer
+        )
         
     def summarize(
         self,
-        text: Union[str, List[str]],
-        ratio: float = 0.3,
-        max_length: Optional[int] = None,
-        min_length: Optional[int] = None,
-        return_metadata: bool = False,
-        **kwargs
-    ) -> Union[str, Dict[str, Any]]:
-        """Generate summary of text
-        
-        Args:
-            text: Input text or list of texts
-            ratio: Target summary ratio for extractive mode
-            max_length: Maximum summary length
-            min_length: Minimum summary length
-            return_metadata: Whether to return additional metadata
-            **kwargs: Additional arguments for summarization
-            
-        Returns:
-            Generated summary or dictionary with summary and metadata
-        """
-        # Handle list input
-        if isinstance(text, list):
-            text = ' '.join(text)
-            
-        # Set length constraints
-        max_len = max_length or int(len(word_tokenize(text)) * ratio)
-        min_len = min_length or self.min_length
-        
-        result = {'source_text': text}
-        
-        if self.mode == "abstractive":
-            # Generate abstractive summary
-            summary = self.summarization_pipeline(
-                text,
-                max_length=max_len,
-                min_length=min_len,
-                do_sample=False,
-                **kwargs
-            )[0]['summary_text']
-            
-            summary = self._clean_generated_summary(summary)
-            result['summary'] = summary
-            result['mode'] = 'abstractive'
-            
-        else:
-            # Generate extractive summary
-            sentences = sent_tokenize(text)
-            scored_sentences = self._get_sentence_scores(
-                sentences,
-                top_n=max(1, int(len(sentences) * ratio))
-            )
-            
-            # Sort selected sentences by original position
-            selected_sentences = sorted(
-                scored_sentences,
-                key=lambda x: x['position']
-            )
-            
-            summary = self._merge_sentences(
-                [s['sentence'] for s in selected_sentences],
-                max_length=max_len
-            )
-            
-            result['summary'] = summary
-            result['mode'] = 'extractive'
-            result['selected_sentences'] = selected_sentences
-            
-        if return_metadata:
-            result['statistics'] = {
-                'source_length': len(word_tokenize(text)),
-                'summary_length': len(word_tokenize(result['summary'])),
-                'compression_ratio': len(word_tokenize(result['summary'])) / len(word_tokenize(text))
-            }
-            return result
-            
-        return result['summary']
-        
-    def multi_document_summarize(
-        self,
-        documents: List[str],
-        **kwargs
-    ) -> Dict[str, Any]:
-        """Generate summary from multiple documents
-        
-        Args:
-            documents: List of document texts
-            **kwargs: Additional arguments for summarization
-            
-        Returns:
-            Dictionary with summary and metadata
-        """
-        # First summarize each document
-        summaries = []
-        for doc in documents:
-            summary = self.summarize(doc, return_metadata=True, **kwargs)
-            summaries.append(summary)
-            
-        # Then summarize the combined summaries
-        combined_summary = self.summarize(
-            [s['summary'] for s in summaries],
-            return_metadata=True,
-            **kwargs
-        )
-        
-        return {
-            'final_summary': combined_summary['summary'],
-            'document_summaries': summaries,
-            'statistics': {
-                'num_documents': len(documents),
-                'avg_document_length': np.mean([
-                    s['statistics']['source_length']
-                    for s in summaries
-                ]),
-                'final_compression_ratio': combined_summary['statistics']['compression_ratio']
-            }
-        }
-        
-    def controlled_summarize(
-        self,
         text: str,
-        target_length: int,
-        style: Optional[str] = None,
-        focus_points: Optional[List[str]] = None,
-        **kwargs
-    ) -> Dict[str, Any]:
-        """Generate summary with controlled length and style
+        ratio: float = 0.3,
+        min_length: int = 40,
+        max_length: int = 600
+    ) -> str:
+        """Generate extractive summary of Thai text
         
         Args:
             text: Input text
-            target_length: Target summary length in words
-            style: Summary style (formal, casual, etc.)
-            focus_points: List of points to focus on
-            **kwargs: Additional arguments for summarization
+            ratio: Target summary ratio (0.0-1.0)
+            min_length: Minimum summary length
+            max_length: Maximum summary length
             
         Returns:
-            Dictionary with summary and metadata
+            Extractive summary
         """
-        # Prepare control tokens
-        control_tokens = []
-        
-        if style:
-            control_tokens.append(f"<style={style}>")
+        # Split into sentences
+        sentences = split_sentences(text)
+        if len(sentences) <= 1:
+            return text
             
-        if focus_points:
-            control_tokens.extend([f"<focus={point}>" for point in focus_points])
+        # Convert to TF-IDF matrix
+        tfidf_matrix = self.vectorizer.fit_transform(sentences)
+        
+        # Calculate sentence scores using similarity matrix
+        similarity_matrix = (tfidf_matrix * tfidf_matrix.T).toarray()
+        scores = self._score_sentences(similarity_matrix)
+        
+        # Select top sentences
+        num_sentences = max(1, int(len(sentences) * ratio))
+        selected_indices = np.argsort(scores)[-num_sentences:]
+        selected_indices.sort()  # Maintain original order
+        
+        # Build summary
+        summary_sentences = [sentences[i] for i in selected_indices]
+        summary = ' '.join(summary_sentences)
+        
+        # Apply length constraints
+        if len(summary) < min_length and len(text) > min_length:
+            return text[:max_length]
+        elif len(summary) > max_length:
+            return summary[:max_length]
             
-        # Add control tokens to input
-        controlled_input = ' '.join(control_tokens + [text])
+        return summary
         
-        # Generate summary
-        summary = self.summarize(
-            controlled_input,
-            max_length=target_length,
-            min_length=max(10, target_length - 20),
-            return_metadata=True,
-            **kwargs
-        )
+    def _score_sentences(self, similarity_matrix: np.ndarray) -> np.ndarray:
+        """Score sentences based on similarity matrix using TextRank"""
+        # Constants for TextRank
+        damping = 0.85
+        epsilon = 1e-8
+        max_iter = 100
         
-        # Add control metadata
-        summary['control'] = {
-            'target_length': target_length,
-            'style': style,
-            'focus_points': focus_points
-        }
+        n_sentences = len(similarity_matrix)
         
-        return summary 
+        # Normalize similarity matrix
+        norm = similarity_matrix.sum(axis=1, keepdims=True)
+        norm[norm == 0] = 1  # Avoid division by zero
+        transition_matrix = similarity_matrix / norm
+        
+        # Initialize scores
+        scores = np.ones(n_sentences) / n_sentences
+        
+        # Power iteration
+        for _ in range(max_iter):
+            prev_scores = scores
+            scores = (1 - damping) + damping * (transition_matrix.T @ scores)
+            
+            # Check convergence
+            if np.abs(scores - prev_scores).sum() < epsilon:
+                break
+                
+        return scores
+
+    def keywords(self, text: str, top_k: int = 10) -> List[str]:
+        """Extract keywords from text using TF-IDF scores
+        
+        Args:
+            text: Input text
+            top_k: Number of keywords to return
+            
+        Returns:
+            List of keywords
+        """
+        # Tokenize text
+        tokens = word_tokenize(text)
+        
+        # Convert to TF-IDF
+        tfidf_matrix = self.vectorizer.fit_transform([text])
+        feature_names = self.vectorizer.get_feature_names_out()
+        
+        # Get top scoring words
+        scores = dict(zip(feature_names, tfidf_matrix.toarray()[0]))
+        sorted_words = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        
+        return [word for word, score in sorted_words[:top_k]]

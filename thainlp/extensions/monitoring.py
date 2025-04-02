@@ -12,10 +12,10 @@ import logging
 from datetime import datetime
 
 # Prometheus metrics
-REQUESTS_TOTAL = Counter('pythainlp_requests_total', 'Total requests processed')
-PROCESSING_TIME = Histogram('pythainlp_processing_seconds', 'Time spent processing request')
-MEMORY_USAGE = Gauge('pythainlp_memory_usage_bytes', 'Memory usage in bytes')
-CPU_USAGE = Gauge('pythainlp_cpu_usage_percent', 'CPU usage percentage')
+REQUESTS_TOTAL = Counter('thainlp_requests_total', 'Total requests processed')
+PROCESSING_TIME = Histogram('thainlp_processing_seconds', 'Time spent processing request')
+MEMORY_USAGE = Gauge('thainlp_memory_usage_bytes', 'Memory usage in bytes')
+CPU_USAGE = Gauge('thainlp_cpu_usage_percent', 'CPU usage percentage')
 
 # OpenTelemetry setup
 trace.set_tracer_provider(TracerProvider())
