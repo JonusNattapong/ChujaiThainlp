@@ -1,13 +1,15 @@
 """
 Maximum matching tokenizer for Thai text
 """
-from typing import List
+from typing import List, Set # Added Set for type hint
 import re
-from . import THAI_WORDS
+# Removed: from . import THAI_WORDS
+from thainlp.resources import get_words # Import get_words function
 
 class MaximumMatchingTokenizer:
-    def __init__(self, custom_dict: set = None):
-        self.dictionary = THAI_WORDS.copy()
+    def __init__(self, custom_dict: Set[str] = None): # Changed type hint to Set[str]
+        # Use get_words() to fetch the dictionary from resources
+        self.dictionary: Set[str] = get_words() # Changed to call get_words()
         if custom_dict:
             self.dictionary.update(custom_dict)
             
