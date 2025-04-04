@@ -1,9 +1,51 @@
-pytest>=6.0.0
-flake8>=3.9.0
-mypy>=0.812
-black>=23.0.0
-isort>=5.12.0
-pytest-cov>=4.1.0
-pre-commit>=3.3.0
-sphinx>=7.0.0
-sphinx-rtd-theme>=1.2.0 
+# Include all base requirements
+-r requirements.txt
+
+# Development tools
+pytest>=6.0
+pytest-cov>=2.0
+pytest-xdist>=2.4.0  # For parallel test execution
+pytest-benchmark>=3.4.0  # For performance testing
+black>=22.0
+isort>=5.0
+flake8>=3.9
+mypy>=0.910
+pylint>=2.10.0
+bandit>=1.7.0  # For security checks
+safety>=1.10.0  # For dependency security checks
+pre-commit>=2.15.0
+
+# Type checking
+types-requests>=2.26.0
+types-PyYAML>=5.4.0
+pandas-stubs>=1.2.0
+
+# Documentation
+sphinx>=4.0
+sphinx-rtd-theme>=0.5
+sphinx-markdown-tables>=0.0.15
+sphinx-copybutton>=0.4.0
+sphinx-autodoc-typehints>=1.12.0
+nbsphinx>=0.8.0  # For Jupyter notebook documentation
+jupyter>=1.0.0
+
+# Testing utilities
+coverage>=6.0
+hypothesis>=6.0  # For property-based testing
+faker>=8.0  # For generating test data
+requests-mock>=1.9.0
+responses>=0.13.0
+freezegun>=1.1.0  # For time-dependent tests
+
+# Development utilities
+ipython>=7.0.0
+ipdb>=0.13.0
+memory_profiler>=0.58.0  # For memory profiling
+line_profiler>=3.3.0  # For line-by-line profiling
+ptpython>=3.0.0  # Better Python REPL
+
+# Build tools
+build>=0.7.0
+twine>=3.4.0
+wheel>=0.37.0
+setuptools>=57.0.0
