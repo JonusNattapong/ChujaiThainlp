@@ -1,10 +1,10 @@
 # ChujaiThaiNLP: Advanced Thai Natural Language Processing
 
   <div align="center">
-  
-    <img src="thainlp/docs/images/logo.png" alt="ChujaiThaiNLP Logo" width="200"/>
-  
 
+    <img src="thainlp/docs/images/logo.png" alt="ChujaiThaiNLP Logo" width="200"/>
+    </div>
+<div align="center">
   [![License](https://img.shields.io/github/license/JonusNattapong/ChujaiThainlp)](https://github.com/JonusNattapong/ChujaiThainlp/blob/main/LICENSE)
   [![PyPI](https://img.shields.io/pypi/v/chujaithai)](https://pypi.org/project/chujaithai/)
   [![Stars](https://img.shields.io/github/stars/JonusNattapong/ChujaiThainlp)](https://github.com/JonusNattapong/ChujaiThainlp/stargazers)
