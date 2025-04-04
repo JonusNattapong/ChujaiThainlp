@@ -5,6 +5,7 @@
 Added comprehensive speech processing capabilities:
 
 ### Added
+
 - **Text-to-speech synthesis**
   - High-quality Thai speech synthesis
   - Multiple voice support
@@ -33,6 +34,7 @@ Added comprehensive speech processing capabilities:
   - Audio mixing
 
 ### Examples
+
 See `examples/speech_example.py` for usage demonstrations
 
 ## [2.0.0] - 2025-04-04
