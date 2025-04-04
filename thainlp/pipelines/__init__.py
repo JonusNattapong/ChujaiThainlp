@@ -1,8 +1,8 @@
 """
 ThaiNLP Processing Pipelines Module
 """
-from .standard_pipeline import StandardThaiPipeline
+from .thai_pipeline import ThaiNLPPipeline
 
 __all__ = [
-    "StandardThaiPipeline"
+    "ThaiNLPPipeline"
 ]

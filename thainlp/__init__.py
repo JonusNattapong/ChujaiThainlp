@@ -15,29 +15,43 @@ from .tokenization import (
     MaximumMatchingTokenizer,
 )
 
-# Classification models
-from .models.classification import TokenClassifier
+# Named Entity Recognition
+from .ner import (
+    ThaiNamedEntityRecognition,
+    tag as ner_tag
+)
+
+# Sentiment Analysis
+from .sentiment import (
+    ThaiSentimentAnalyzer,
+    analyze as analyze_sentiment
+)
 
 # Question answering
-from .models.qa import (
-    TextQA,
-    TableQA,
+from .qa import (
+    ThaiQuestionAnswering,
+    TableQuestionAnswering,
+    answer_question,
 )
 
 # Text generation
-from .models.generation import (
+from .generation import (
+    ThaiTextGenerator,
     TextGenerator,
     FillMask,
 )
 
 # Translation
-from .models.translation import Translator
+from .translation import Translator
 
 # Summarization
-from .models.summarization import Summarizer
+from .summarization import Summarizer
 
 # Text similarity
-from .models.similarity import SentenceSimilarity
+from .similarity import (
+    ThaiTextAnalyzer,
+    SentenceSimilarity
+)
 
 # Unified pipeline
 from .pipelines import ThaiNLPPipeline
@@ -58,20 +72,46 @@ from .utils.monitoring import (
 
 # Default instances for convenience
 _default_pipeline = None
+_default_ner = None
+_default_sentiment = None
+_default_qa = None
+_default_generator = None
 
 def get_pipeline(**kwargs) -> ThaiNLPPipeline:
-    """Get or create default pipeline instance
-    
-    Args:
-        **kwargs: Arguments to pass to pipeline constructor
-        
-    Returns:
-        ThaiNLPPipeline instance
-    """
+    """Get or create default pipeline instance"""
     global _default_pipeline
     if _default_pipeline is None:
         _default_pipeline = ThaiNLPPipeline(**kwargs)
     return _default_pipeline
+
+# Convenient high-level functions
+def get_entities(text: str) -> list:
+    """Extract named entities from Thai text"""
+    global _default_ner
+    if _default_ner is None:
+        _default_ner = ThaiNamedEntityRecognition()
+    return _default_ner.extract_entities(text)
+
+def get_sentiment(text: str) -> dict:
+    """Analyze sentiment of Thai text"""
+    global _default_sentiment
+    if _default_sentiment is None:
+        _default_sentiment = ThaiSentimentAnalyzer()
+    return _default_sentiment.analyze_sentiment(text)
+
+def ask(question: str, context: str) -> dict:
+    """Get answer from context"""
+    global _default_qa
+    if _default_qa is None:
+        _default_qa = ThaiQuestionAnswering()
+    return _default_qa.answer_question(question, context)
+
+def generate(prompt: str, **kwargs) -> str:
+    """Generate Thai text from prompt"""
+    global _default_generator
+    if _default_generator is None:
+        _default_generator = ThaiTextGenerator()
+    return _default_generator.generate_text(prompt, **kwargs)
 
 # Package info
 __author__ = "ThaiNLP"
@@ -92,14 +132,34 @@ __all__ = [
     "ThaiTokenizer",
     "MaximumMatchingTokenizer",
     
-    # Models
-    "TokenClassifier",
-    "TextQA",
-    "TableQA", 
+    # NER
+    "ThaiNamedEntityRecognition",
+    "ner_tag",
+    "get_entities",
+    
+    # Sentiment
+    "ThaiSentimentAnalyzer",
+    "analyze_sentiment",
+    "get_sentiment",
+    
+    # Question Answering
+    "ThaiQuestionAnswering",
+    "TableQuestionAnswering",
+    "answer_question",
+    "ask",
+    
+    # Generation
+    "ThaiTextGenerator",
     "TextGenerator",
     "FillMask",
+    "generate",
+    
+    # Translation & Summarization
     "Translator",
     "Summarizer",
+    
+    # Similarity
+    "ThaiTextAnalyzer",
     "SentenceSimilarity",
     
     # Pipeline
