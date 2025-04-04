@@ -1,220 +1,200 @@
-# ChujaiThainlp: ไลบรารีประมวลผลภาษาไทย
+# ChujaiThainlp: Advanced Thai Natural Language Processing
 
-**ChujaiThainlp** เป็นไลบรารีภาษา Python ที่ออกแบบมาเพื่อการประมวลผลภาษาไทยโดยเฉพาะ โดยมุ่งเน้นความง่ายในการใช้งาน ประสิทธิภาพ และความสามารถที่ครอบคลุม ตั้งแต่การจัดการข้อความพื้นฐานไปจนถึงการวิเคราะห์ภาษาขั้นสูง
+ChujaiThainlp is a comprehensive Thai Natural Language Processing library that provides state-of-the-art models and tools for various NLP tasks. The library supports both Thai and English languages with a focus on Thai-specific processing.
 
-## 🚀 คุณสมบัติหลัก
+## Key Features
 
-- ✨ **อินเตอร์เฟซที่ใช้งานง่าย:** ออกแบบด้วย method chaining และฟังก์ชันสำเร็จรูป เพื่อความสะดวกในการพัฒนา
-- 🤖 **Model Hub:** ระบบจัดการโมเดลแบบรวมศูนย์ รองรับการใช้งานโมเดล transformer ภาษาไทยได้ง่าย
-- 🔄 **ความสามารถหลากหลาย:** รองรับการจัดการข้อความภาษาไทยในรูปแบบต่างๆ เช่น การปรับแต่ง การแปลง และการแยกข้อมูล
-- 📊 **การวิเคราะห์ข้อความ:** มีเครื่องมือสำหรับวิเคราะห์สัดส่วนภาษา นับประเภทอักขระ และแบ่งประโยค
-- ⚡ **ประสิทธิภาพ:** พัฒนาโดยคำนึงถึงประสิทธิภาพในการประมวลผลข้อความขนาดใหญ่
-- 🧪 **ความน่าเชื่อถือ:** ผ่านการทดสอบอย่างครอบคลุมเพื่อให้มั่นใจในความถูกต้องของการทำงาน
+- **Text Classification**
+  - Token-level classification
+  - Named Entity Recognition
+  - Part-of-speech tagging
+  - Support for fine-tuning on domain data
 
-## ⚙️ การติดตั้ง
+- **Question Answering**
+  - Text-based QA
+  - Table QA
+  - Multiple answer generation
+  - Context-aware processing
 
-สามารถติดตั้งไลบรารี ChujaiThainlp ผ่าน pip:
+- **Translation**
+  - Thai ↔ English translation
+  - Batch processing
+  - Quality scoring
+  - Custom vocabulary support
 
-```bash
-# ติดตั้งแบบพื้นฐาน
-pip install ChujaiThainlp==0.4.0
+- **Text Generation**
+  - Contextual text generation
+  - Streaming generation
+  - Temperature and sampling control
+  - Prompt templates
 
-# ติดตั้งพร้อม transformer models (WangchanBERTa)
-pip install "ChujaiThainlp[hf]==0.4.0"
+- **Fill-Mask**
+  - Masked token prediction
+  - Multiple candidate generation
+  - Confidence scoring
+  - Support for multiple masks
 
-# ติดตั้งพร้อม API server
-pip install "ChujaiThainlp[api]==0.4.0"
+- **Summarization**
+  - Extractive and abstractive summarization
+  - Length control
+  - ROUGE metrics
+  - Batch processing
 
-# ติดตั้งพร้อมระบบ monitoring
-pip install "ChujaiThainlp[monitor]==0.4.0"
+- **Sentence Similarity**
+  - Cross-encoder scoring
+  - Bi-encoder embeddings
+  - Efficient similarity search
+  - Text ranking
 
-# ติดตั้งพร้อมระบบความปลอดภัย
-pip install "ChujaiThainlp[security]==0.4.0"
-
-# ติดตั้งทั้งหมด
-pip install "ChujaiThainlp[hf,api,monitor,security]==0.4.0"
-
-# สำหรับนักพัฒนา
-pip install "ChujaiThainlp[dev,docs]==0.4.0"
-```
-
-หากต้องการติดตั้งเวอร์ชันล่าสุดจากแหล่งข้อมูลโดยตรง:
-
-```bash
-# ติดตั้งแบบพื้นฐาน
-git clone https://github.com/username/thainlp.git
-cd thainlp
-pip install -e .
-
-# ติดตั้งพร้อม dependencies ที่ต้องการ
-pip install -e ".[hf]"  # สำหรับ transformer
-pip install -e ".[dev,docs]"  # สำหรับการพัฒนา
-```
-
-## 📖 คู่มือการใช้งาน
-
-### 1. ฟังก์ชันสำเร็จรูป (Quick Functions)
-
-สำหรับงานประมวลผลทั่วไป สามารถใช้ฟังก์ชันสำเร็จรูปได้โดยตรง:
-
-```python
-from thainlp.utils.thai_text import normalize_text, romanize, extract_thai, split_sentences
-
-# การปรับแต่งข้อความ (Normalization)
-# ลบช่องว่างซ้ำซ้อน, แปลงเลขไทย, จัดการอักขระพิเศษ
-text = normalize_text("  สวัสดี   ครับ  ๑๒๓ ")
-# ผลลัพธ์: "สวัสดี ครับ 123"
-
-# การแปลงเป็นอักษรโรมัน (Romanization)
-roman = romanize("สวัสดี")
-# ผลลัพธ์: "sawatdi"
-
-# การแยกเฉพาะข้อความภาษาไทย (Thai Text Extraction)
-thai = extract_thai("Hello สวัสดี 123")
-# ผลลัพธ์: "สวัสดี"
-
-# การแบ่งประโยค (Sentence Splitting)
-sentences = split_sentences("สวัสดีครับ วันนี้อากาศดีนะครับ ไปไหนมาครับ")
-# ผลลัพธ์: ["สวัสดีครับ", "วันนี้อากาศดีนะครับ", "ไปไหนมาครับ"]
-```
-
-### 2. การประมวลผลแบบต่อเนื่อง (Method Chaining)
-
-ใช้คลาส `ThaiTextProcessor` เพื่อประมวลผลข้อความหลายขั้นตอนอย่างต่อเนื่อง:
-
-```python
-from thainlp.utils.thai_text import process_text
-
-# ตัวอย่างการประมวลผลหลายขั้นตอน
-text_input = "สวัสดี ๑๒๓ Hello! ภาษาไทย"
-result = (process_text(text_input)
-         .normalize()          # 1. ปรับรูปแบบข้อความ
-         .to_arabic_digits()   # 2. แปลงเลขไทยเป็นอารบิก
-         .extract_thai()       # 3. แยกเฉพาะข้อความภาษาไทย
-         .to_roman()          # 4. แปลงเป็นอักษรโรมัน
-         .get_text())         # 5. ดึงผลลัพธ์สุดท้าย
-# ผลลัพธ์: "sawatdi phasathai"
-
-# ตัวอย่างการวิเคราะห์ข้อความ
-text_analysis = "Hello สวัสดีครับ 123"
-processor = process_text(text_analysis)
-
-# วิเคราะห์สัดส่วนภาษา
-ratios = processor.get_script_ratios()
-print(f"Thai Ratio: {ratios['thai']:.2%}")
-print(f"Latin Ratio: {ratios['latin']:.2%}")
-
-# นับประเภทอักขระ
-counts = processor.get_character_counts()
-print(f"Consonants: {counts.get('consonants', 0)}")
-print(f"Vowels: {counts.get('vowels', 0)}")
-```
-
-### 3. การใช้งาน Model Hub และโมเดล Transformer
-
-ใช้ Model Hub เพื่อจัดการและเรียกใช้งานโมเดล transformer ได้ง่าย:
-
-```python
-# ตัวอย่างการใช้งาน NER ด้วย WangchanBERTa
-from thainlp.ner import tag_transformer
-
-text = "นายสมชายเดินทางไปกรุงเทพมหานครเมื่อวานนี้"
-entities = tag_transformer(text)
-# ผลลัพธ์: [('สมชาย', 'PERSON', 3, 9), ('กรุงเทพมหานคร', 'LOCATION', 19, 33)]
-
-# ตัวอย่างการใช้งาน Sentiment Analysis ด้วย WangchanBERTa
-from thainlp.sentiment import analyze_transformer
-
-text = "หนังเรื่องนี้สนุกมาก ชอบทุกตัวละครเลย"
-sentiment = analyze_transformer(text)
-# ผลลัพธ์: {'label': 'positive', 'score': 0.989}
-
-# ใช้โมเดลอื่นผ่าน Model Hub
-result = analyze_transformer(text, model_name="custom_sentiment_model")
-```
-
-### 4. การตรวจสอบความถูกต้อง (Validation)
-
-ใช้คลาส `ThaiValidator` สำหรับตรวจสอบลักษณะของข้อความภาษาไทย:
-
-```python
-from thainlp.utils.thai_text import ThaiValidator
-
-validator = ThaiValidator()
-
-# ตรวจสอบว่าเป็นอักขระไทยหรือไม่
-is_thai_char = validator.is_thai_char("ก")  # True
-is_thai_char = validator.is_thai_char("A")  # False
-
-# ตรวจสอบว่าเป็นคำไทยที่ถูกต้องตามโครงสร้างพยางค์หรือไม่
-is_valid_word = validator.is_valid_word("สวัสดี")  # True
-is_valid_word = validator.is_valid_word("ก า")    # False (มีช่องว่าง)
-is_valid_word = validator.is_valid_word("hello")  # False
-
-# ดูรูปแบบ Regex สำหรับพยางค์ไทย
-syllable_pattern = validator.get_syllable_pattern()
-```
-
-## 🎯 ภาพรวมความสามารถ
-
-| หมวดหมู่             | ความสามารถ                                                                 |
-| :------------------- | :------------------------------------------------------------------------- |
-| **Model Hub**       | `load_model`, `register_model`, `get_model_info`                          |
-| **NER**            | `tag_transformer` (WangchanBERTa), `extract_entities` (Rule-based)         |
-| **Sentiment**      | `analyze_transformer` (WangchanBERTa), `analyze_sentiment` (Lexicon-based) |
-| **การจัดการข้อความ** | `normalize_text`, `remove_tone_marks`, `remove_diacritics`, `extract_thai` |
-| **การแปลงรูปแบบ**   | `thai_to_roman`, `thai_digit_to_arabic_digit`, `arabic_digit_to_thai_digit` |
-| **การวิเคราะห์**     | `detect_language`, `count_thai_characters`, `split_sentences`              |
-| **การตรวจสอบ**     | `is_thai_char`, `is_thai_word`, `is_valid_thai_word`                       |
-| **การแปลงตัวเลข**   | `thai_number_to_text`                                                      |
-
-## 📚 เอกสารและตัวอย่าง
-
-- **ตัวอย่างการใช้งาน:** ดูโค้ดตัวอย่างเพิ่มเติมได้ในไดเรกทอรี `thainlp/examples/`
-  - [`thai_text_example.py`](thainlp/examples/thai_text_example.py): ตัวอย่างการใช้อินเตอร์เฟซหลัก
-  - [`thai_utils_example.py`](thainlp/examples/thai_utils_example.py): ตัวอย่างการใช้ฟังก์ชันพื้นฐาน
-  - [`transformer_ner_example.py`](thainlp/examples/transformer_ner_example.py): ตัวอย่างการใช้ NER แบบ transformer
-  - [`transformer_sentiment_example.py`](thainlp/examples/transformer_sentiment_example.py): ตัวอย่างการใช้ Sentiment Analysis แบบ transformer
-  - [`model_hub_example.py`](thainlp/examples/model_hub_example.py): ตัวอย่างการใช้ Model Hub
-- **เอกสารอ้างอิง:** อ่านคำอธิบายฟังก์ชันโดยละเอียดได้ที่ [`thainlp/docs/thai_utils.md`](thainlp/docs/thai_utils.md)
-
-## 🛠️ สำหรับนักพัฒนา
-
-### การตั้งค่าสภาพแวดล้อม
+## Installation
 
 ```bash
-# Clone repository
-git clone https://github.com/username/thainlp.git
-cd thainlp
-
-# สร้างและเปิดใช้งาน virtual environment (แนะนำ)
-python -m venv venv
-source venv/bin/activate  # บน Linux/macOS
-# venv\Scripts\activate  # บน Windows
-
-# ติดตั้งไลบรารีและ dependencies สำหรับการพัฒนา
-pip install -e ".[dev]"
+pip install chujaithai-nlp
 ```
 
-### การรันชุดทดสอบ
+## Quick Start
 
-```bash
-pytest tests/
+```python
+from thainlp.pipelines import ThaiNLPPipeline
+
+# Initialize pipeline
+pipeline = ThaiNLPPipeline()
+
+# Basic text analysis
+text = "กรุงเทพมหานครเป็นเมืองหลวงของประเทศไทย"
+result = pipeline.analyze(text, tasks=['tokens', 'entities', 'translation'])
+
+# Question answering
+context = "ประเทศไทยมีประชากรประมาณ 70 ล้านคน"
+question = "ประเทศไทยมีประชากรเท่าไร"
+answer = pipeline.answer_question(question, context)
+
+# Translation
+eng_text = pipeline.translate(text, source_lang='th', target_lang='en')
+
+# Text generation
+prompt = "เทคโนโลยีปัญญาประดิษฐ์"
+generated = pipeline.generate_text(prompt, max_length=100)
+
+# Summarization
+long_text = "..." # Your long text here
+summary = pipeline.summarize(long_text, ratio=0.3)
 ```
 
-## 🤝 การมีส่วนร่วม
+## Advanced Usage
 
-เรายินดีต้อนรับการมีส่วนร่วมในทุกรูปแบบ! หากท่านสนใจ กรุณาศึกษา [แนวทางการมีส่วนร่วม](CONTRIBUTING.md) ของเรา และสามารถเปิด Issue หรือส่ง Pull Request ได้
+### Custom Pipeline Components
 
-## 📜 สัญญาอนุญาต
+```python
+# Initialize with specific components
+pipeline = ThaiNLPPipeline(
+    components=['translation', 'qa'],
+    device='cuda',
+    batch_size=32
+)
+```
 
-ไลบรารีนี้เผยแพร่ภายใต้สัญญาอนุญาต MIT ดูรายละเอียดเพิ่มเติมได้ที่ไฟล์ [LICENSE](LICENSE)
+### Batch Processing
 
-## 👥 ทีมผู้พัฒนา
+```python
+# Batch translation
+texts = ["สวัสดี", "ขอบคุณ", "ลาก่อน"]
+translations = pipeline.translate(texts, source_lang='th', target_lang='en')
 
-ThaiNLP พัฒนาโดยทีมงานและผู้มีส่วนร่วม สามารถดูรายชื่อได้ที่ [CONTRIBUTORS.md](CONTRIBUTORS.md)
+# Batch summarization
+documents = ["doc1", "doc2", "doc3"]
+summaries = pipeline.summarize(documents, ratio=0.3)
+```
 
-## 📫 ช่องทางการติดต่อ
+### Fine-tuning Models
 
-- **รายงานปัญหา/ข้อเสนอแนะ:** [GitHub Issues](https://github.com/username/thainlp/issues)
-- **สอบถามทั่วไป:** [zombitx64@gmail.com](mailto:zombitx64@gmail.com)
+```python
+# Get specific component
+classifier = pipeline.get_component('classification')
+
+# Fine-tune on custom data
+train_data = [
+    {"text": "text1", "labels": ["label1"]},
+    {"text": "text2", "labels": ["label2"]}
+]
+classifier.fine_tune(train_data, epochs=3)
+```
+
+## Model Hub Integration
+
+```python
+from thainlp.model_hub import ModelHub
+
+# Download pre-trained model
+hub = ModelHub()
+model = hub.load_model('thai-qa-large')
+
+# Use in pipeline
+pipeline = ThaiNLPPipeline(qa_model=model)
+```
+
+## Components
+
+### Text Classification
+
+- Token-level classification with confidence scores
+- Support for custom label sets
+- Efficient batch processing
+- Model fine-tuning capabilities
+
+### Question Answering
+
+- Support for both text and table inputs
+- Multiple answer generation
+- Confidence scoring
+- Cross-lingual capabilities
+
+### Translation
+
+- Neural machine translation
+- Support for multiple language pairs
+- Quality metrics
+- Custom vocabulary integration
+
+### Text Generation
+
+- Transformer-based generation
+- Streaming support
+- Advanced sampling controls
+- Prompt engineering
+
+### Fill-Mask
+
+- Support for multiple masks
+- Confidence scoring
+- Batch processing
+- Multiple candidates per mask
+
+### Summarization
+
+- Both extractive and abstractive methods
+- Length control
+- ROUGE metrics
+- Batch processing
+
+### Sentence Similarity
+
+- Multiple similarity metrics
+- Efficient similarity search
+- Cross-lingual support
+- Text ranking
+
+## Performance Considerations
+
+- GPU acceleration for improved performance
+- Batch processing for efficient handling of multiple inputs
+- Caching mechanisms for repeated operations
+- Progress monitoring for long-running tasks
+
+## Contributing
+
+Contributions are welcome! Please read our contributing guidelines before submitting pull requests.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
