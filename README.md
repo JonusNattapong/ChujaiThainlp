@@ -1,6 +1,6 @@
 # ChujaiThaiNLP: Advanced Thai Natural Language Processing
 
-  ![ChujaiThaiNLP Logo](thainlp/docs/images/logo.png)
+  ![ChujaiThaiNLP Logo](thainlp/docs/images/logo.png){ width=100 height=100 }
 
   [![License](https://img.shields.io/github/license/JonusNattapong/ChujaiThainlp)](https://github.com/JonusNattapong/ChujaiThainlp/blob/main/LICENSE)
   [![PyPI](https://img.shields.io/pypi/v/chujaithai)](https://pypi.org/project/chujaithai/)
