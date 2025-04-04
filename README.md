@@ -5,7 +5,6 @@
   
 
   [![License](https://img.shields.io/github/license/JonusNattapong/ChujaiThainlp)](https://github.com/JonusNattapong/ChujaiThainlp/blob/main/LICENSE)
-  [![PyPI](https://img.shields.io/pypi/v/chujaithai)](https://pypi.org/project/chujaithai/)
   [![Stars](https://img.shields.io/github/stars/JonusNattapong/ChujaiThainlp)](https://github.com/JonusNattapong/ChujaiThainlp/stargazers)
 
   </div>
