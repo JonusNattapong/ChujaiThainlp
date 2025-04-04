@@ -56,6 +56,30 @@ from .similarity import (
 # Unified pipeline
 from .pipelines import ThaiNLPPipeline
 
+# Speech processing
+from .speech import (
+    ThaiTTS,
+    ThaiASR,
+    VoiceActivityDetector,
+    VoiceProcessor,
+    AudioUtils,
+    synthesize,
+    transcribe,
+    detect_voice_activity
+)
+
+# Speech processing
+from .speech import (
+    ThaiTTS,
+    ThaiASR,
+    VoiceActivityDetector,
+    VoiceProcessor,
+    AudioUtils,
+    synthesize,
+    transcribe,
+    detect_voice_activity
+)
+
 # Utilities
 from .utils.thai_utils import (
     normalize_text,
@@ -166,9 +190,19 @@ __all__ = [
     "ThaiNLPPipeline",
     "get_pipeline",
     
+    # Speech
+    'ThaiTTS',
+    'ThaiASR',
+    'VoiceActivityDetector',
+    'VoiceProcessor',
+    'AudioUtils',
+    'synthesize',
+    'transcribe',
+    'detect_voice_activity',
+
     # Utils
     "normalize_text",
-    "clean_thai_text", 
+    "clean_thai_text",
     "contains_thai",
     "separate_thai_english",
     "detect_language_mix",
