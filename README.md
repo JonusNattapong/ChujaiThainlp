@@ -1,14 +1,10 @@
 # ChujaiThaiNLP: Advanced Thai Natural Language Processing
 
-<p align="center">
-  <img src="thainlp/docs/images/logo.png" alt="ChujaiThaiNLP Logo" width="200"/>
-</p>
+  ![ChujaiThaiNLP Logo](thainlp/docs/images/logo.png)
 
-<p align="center">
-  <a href="https://github.com/JonusNattapong/ChujaiThainlp/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/JonusNattapong/ChujaiThainlp"></a>
-  <a href="https://pypi.org/project/chujaithai/"><img alt="PyPI" src="https://img.shields.io/pypi/v/chujaithai"></a>
-  <a href="https://github.com/JonusNattapong/ChujaiThainlp/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/JonusNattapong/ChujaiThainlp"></a>
-</p>
+  [![License](https://img.shields.io/github/license/JonusNattapong/ChujaiThainlp)](https://github.com/JonusNattapong/ChujaiThainlp/blob/main/LICENSE)
+  [![PyPI](https://img.shields.io/pypi/v/chujaithai)](https://pypi.org/project/chujaithai/)
+  [![Stars](https://img.shields.io/github/stars/JonusNattapong/ChujaiThainlp)](https://github.com/JonusNattapong/ChujaiThainlp/stargazers)
 
 **ChujaiThaiNLP** is a cutting-edge Natural Language Processing library designed specifically for Thai language, with advanced multimodal capabilities for seamless integration of text, speech, vision, and more.
 
