@@ -68,16 +68,16 @@ from .speech import (
     detect_voice_activity
 )
 
-# Speech processing
-from .speech import (
-    ThaiTTS,
-    ThaiASR,
-    VoiceActivityDetector,
-    VoiceProcessor,
-    AudioUtils,
-    synthesize,
-    transcribe,
-    detect_voice_activity
+# Multimodal processing
+from .multimodal import (
+    transcribe_audio,
+    extract_text_from_image,
+    caption_image,
+    answer_visual_question,
+    transcribe_video,
+    summarize_video,
+    process_multimodal,
+    convert_modality
 )
 
 # Utilities
@@ -200,6 +200,16 @@ __all__ = [
     'transcribe',
     'detect_voice_activity',
 
+    # Multimodal
+    'transcribe_audio',
+    'extract_text_from_image',
+    'caption_image',
+    'answer_visual_question',
+    'transcribe_video',
+    'summarize_video',
+    'process_multimodal',
+    'convert_modality',
+    
     # Utils
     "normalize_text",
     "clean_thai_text",
