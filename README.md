@@ -1,7 +1,7 @@
 # ChujaiThaiNLP: Advanced Thai Natural Language Processing
 
 <p align="center">
-  <img src="docs/images/logo.png" alt="ChujaiThaiNLP Logo" width="200"/>
+  <img src="thainlp/docs/images/logo.png" alt="ChujaiThaiNLP Logo" width="200"/>
 </p>
 
 <p align="center">
