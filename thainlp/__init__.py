@@ -1,49 +1,117 @@
 """
-Thai Natural Language Processing library
+ChujaiThainlp - Advanced Thai Natural Language Processing Library
 """
-from typing import List
-from .tokenization import word_tokenize
-from .utils.thai_utils import (
-    is_thai_char,
-    is_thai_word,
-    remove_tone_marks,
-    remove_diacritics,
-    normalize_text,
-    count_thai_words,
-    extract_thai_text,
-    thai_to_roman,
-    detect_language,
-    thai_number_to_text,
-    thai_digit_to_arabic_digit,
-    arabic_digit_to_thai_digit
+
+__version__ = "2.0.0"
+
+# Core tokenization
+from .tokenization import (
+    word_tokenize,
+    encode,
+    decode,
+    get_tokenizer,
+    get_thai_tokenizer,
+    ThaiTokenizer,
+    MaximumMatchingTokenizer,
 )
-from .tag import pos_tag
-from .thai_spell_correction import ThaiSpellChecker
-from .sentiment.lexicon_based import LexiconSentimentAnalyzer
 
-# Initialize default analyzer
-_sentiment_analyzer = LexiconSentimentAnalyzer()
+# Classification models
+from .models.classification import TokenClassifier
 
-def sentiment(text: str) -> float:
-    """Get sentiment score for Thai text (-1 to 1)"""
-    return _sentiment_analyzer.analyze(text)
+# Question answering
+from .models.qa import (
+    TextQA,
+    TableQA,
+)
 
-__version__ = "1.0.0"
+# Text generation
+from .models.generation import (
+    TextGenerator,
+    FillMask,
+)
+
+# Translation
+from .models.translation import Translator
+
+# Summarization
+from .models.summarization import Summarizer
+
+# Text similarity
+from .models.similarity import SentenceSimilarity
+
+# Unified pipeline
+from .pipelines import ThaiNLPPipeline
+
+# Utilities
+from .utils.thai_utils import (
+    normalize_text,
+    clean_thai_text,
+    contains_thai,
+    separate_thai_english,
+    detect_language_mix,
+)
+
+from .utils.monitoring import (
+    ProgressTracker,
+    ResourceMonitor,
+)
+
+# Default instances for convenience
+_default_pipeline = None
+
+def get_pipeline(**kwargs) -> ThaiNLPPipeline:
+    """Get or create default pipeline instance
+    
+    Args:
+        **kwargs: Arguments to pass to pipeline constructor
+        
+    Returns:
+        ThaiNLPPipeline instance
+    """
+    global _default_pipeline
+    if _default_pipeline is None:
+        _default_pipeline = ThaiNLPPipeline(**kwargs)
+    return _default_pipeline
+
+# Package info
+__author__ = "ThaiNLP"
+__email__ = "contact@thainlp.org"
+__url__ = "https://github.com/thainlp/ChujaiThainlp"
+__license__ = "MIT"
+
 __all__ = [
-    'word_tokenize',
-    'is_thai_char',
-    'is_thai_word',
-    'remove_tone_marks',
-    'remove_diacritics',
-    'normalize_text',
-    'count_thai_words',
-    'extract_thai_text',
-    'thai_to_roman',
-    'detect_language',
-    'thai_number_to_text',
-    'thai_digit_to_arabic_digit',
-    'arabic_digit_to_thai_digit',
-    'pos_tag',
-    'ThaiSpellChecker',
-    'sentiment'
+    # Version
+    "__version__",
+    
+    # Tokenization
+    "word_tokenize",
+    "encode", 
+    "decode",
+    "get_tokenizer",
+    "get_thai_tokenizer",
+    "ThaiTokenizer",
+    "MaximumMatchingTokenizer",
+    
+    # Models
+    "TokenClassifier",
+    "TextQA",
+    "TableQA", 
+    "TextGenerator",
+    "FillMask",
+    "Translator",
+    "Summarizer",
+    "SentenceSimilarity",
+    
+    # Pipeline
+    "ThaiNLPPipeline",
+    "get_pipeline",
+    
+    # Utils
+    "normalize_text",
+    "clean_thai_text", 
+    "contains_thai",
+    "separate_thai_english",
+    "detect_language_mix",
+    "ProgressTracker",
+    "ResourceMonitor",
 ]
