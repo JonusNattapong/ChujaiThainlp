@@ -6,12 +6,14 @@
 
 1. Fork โปรเจคไปยัง GitHub repository ของคุณ
 2. Clone โปรเจค:
+
 ```bash
 git clone https://github.com/yourusername/thainlp.git
 cd thainlp
 ```
 
 3. สร้าง virtual environment และติดตั้ง dependencies:
+
 ```bash
 python -m venv venv
 source venv/bin/activate  # สำหรับ Linux/Mac
@@ -38,6 +40,7 @@ git checkout -b fix/your-fix-name
 - เพิ่ม comments ที่จำเป็น
 
 ตัวอย่าง:
+
 ```python
 def analyze_sentiment(text: str) -> Tuple[float, str, Dict[str, List[str]]]:
     """
@@ -59,6 +62,7 @@ def analyze_sentiment(text: str) -> Tuple[float, str, Dict[str, List[str]]]:
 - เพิ่ม test cases ที่ครอบคลุมกรณีต่างๆ
 
 ตัวอย่าง:
+
 ```python
 def test_analyze_sentiment():
     text = "วันนี้อากาศดีมากๆ"
@@ -90,12 +94,14 @@ pytest tests/
 ## การส่ง Pull Request
 
 1. Commit การเปลี่ยนแปลงของคุณ:
+
 ```bash
 git add .
 git commit -m "feat: เพิ่มฟีเจอร์ใหม่"  # หรือ "fix: แก้ไขบั๊ก"
 ```
 
 2. Push ไปยัง repository ของคุณ:
+
 ```bash
 git push origin feature/your-feature-name
 ```
@@ -108,6 +114,7 @@ git push origin feature/your-feature-name
 ## แนวทางการ Commit
 
 ใช้ conventional commits:
+
 - `feat:` สำหรับฟีเจอร์ใหม่
 - `fix:` สำหรับการแก้ไขบั๊ก
 - `docs:` สำหรับการแก้ไขเอกสาร
@@ -119,6 +126,7 @@ git push origin feature/your-feature-name
 ## การรายงานปัญหา (Issues)
 
 เมื่อรายงานปัญหา กรุณาระบุ:
+
 1. เวอร์ชันของไลบรารี่ที่ใช้
 2. ขั้นตอนการทำซ้ำปัญหา
 3. ข้อความ error ที่พบ (ถ้ามี)
@@ -127,10 +135,10 @@ git push origin feature/your-feature-name
 ## การติดต่อ
 
 - สร้าง issue สำหรับการอภิปราย
-- ติดต่อผ่าน email: zombitx64@gmail.com
+- ติดต่อผ่าน email: <zombitx64@gmail.com>
 
 ## การอนุญาต
 
 การมีส่วนร่วมของคุณจะถูกอนุญาตภายใต้ MIT License เช่นเดียวกับโปรเจค
 
-ขอบคุณที่สนใจมีส่วนร่วมในการพัฒนา ThaiNLP! 
+ขอบคุณที่สนใจมีส่วนร่วมในการพัฒนา ThaiNLP!
