@@ -1,175 +1,101 @@
 """
-Example usage of the Thai NLP pipeline
+Example usage of the ThaiNLP pipeline interface
 """
-from typing import Dict, Any
-from ..pipelines.thai_nlp_pipeline import ThaiNLPPipeline
+import pandas as pd
+from thainlp import ThaiNLPPipeline
 
 def main():
-    # Initialize pipeline with all components
-    pipeline = ThaiNLPPipeline(
-        components=[
-            'classification',
-            'qa',
-            'translation',
-            'generation',
-            'fill_mask',
-            'summarization',
-            'similarity'
-        ],
-        device='cuda',
-        batch_size=32
-    )
+    # Initialize pipeline
+    nlp = ThaiNLPPipeline(load_all=True)
     
-    # Example 1: Basic text analysis
-    text = """
-    กรุงเทพมหานครเป็นเมืองหลวงและนครที่มีประชากรมากที่สุดของประเทศไทย 
-    เป็นศูนย์กลางการปกครอง การศึกษา การคมนาคมขนส่ง การเงินการธนาคาร การพาณิชย์ 
-    การสื่อสาร และความเจริญของประเทศ
-    """
+    print("=== Basic Text Processing ===")
+    text = "นายสมชาย สุดหล่อ เดินทางไปกรุงเทพมหานครเมื่อวานนี้"
     
-    print("Example 1: Text Analysis")
-    print("-" * 50)
+    # Process multiple tasks at once
+    results = nlp.process(text)
+    print("\nMulti-task processing:")
+    print(f"Preprocessed: {results['preprocessed']}")
+    print(f"Tokens: {results['tokens']}")
+    print(f"Entities: {results['entities']}")
+    print(f"Sentiment: {results['sentiment']}")
     
-    results = pipeline.analyze(
-        text,
-        tasks=['tokens', 'entities', 'translation', 'summary']
-    )
+    print("\n=== Named Entity Recognition ===")
+    entities = nlp.get_entities(text)
+    for entity in entities:
+        print(f"- {entity['word']} ({entity['entity']})")
     
-    print("Entities:", [t['token'] for t in results['entities']])
-    print("\nEnglish Translation:", results['translation']['en'])
-    print("\nSummary:", results['summary'])
-    print("\n")
+    print("\n=== Sentiment Analysis ===")
+    texts = [
+        "อาหารอร่อยมาก บริการดีเยี่ยม",
+        "รอนานมาก บริการแย่สุดๆ",
+        "วันนี้อากาศดี ท้องฟ้าแจ่มใส"
+    ]
+    for text in texts:
+        sentiment = nlp.analyze_sentiment(text)
+        print(f"Text: {text}")
+        print(f"Sentiment: {sentiment}\n")
     
-    # Example 2: Question Answering
+    print("=== Question Answering ===")
+    # Text QA
     context = """
-    ประเทศไทยมีประชากรประมาณ 70 ล้านคน มีกรุงเทพมหานครเป็นเมืองหลวง 
-    ภาษาราชการคือภาษาไทย สกุลเงินที่ใช้คือบาท 
-    ประเทศไทยมีการปกครองระบอบประชาธิปไตยอันมีพระมหากษัตริย์ทรงเป็นประมุข
+    เมืองไทยมีประชากรประมาณ 70 ล้านคน มีกรุงเทพมหานครเป็นเมืองหลวง 
+    ประเทศไทยตั้งอยู่ในภูมิภาคเอเชียตะวันออกเฉียงใต้ มีพื้นที่ประมาณ 513,120 ตารางกิโลเมตร
     """
-    
     questions = [
-        "ประเทศไทยมีประชากรเท่าไร",
-        "เมืองหลวงของประเทศไทยคือที่ไหน",
-        "ประเทศไทยใช้สกุลเงินอะไร"
+        "ประเทศไทยมีประชากรเท่าไร?",
+        "เมืองหลวงของประเทศไทยคือที่ไหน?",
+        "ประเทศไทยตั้งอยู่ในภูมิภาคใด?"
     ]
     
-    print("Example 2: Question Answering")
-    print("-" * 50)
-    
+    print("\nText QA:")
     for question in questions:
-        answer = pipeline.answer_question(
-            question=question,
-            context=context,
-            return_scores=True
-        )
+        answer = nlp.answer_question(question, context)
         print(f"Q: {question}")
-        print(f"A: {answer['answer']} (confidence: {answer['score']:.2f})\n")
-        
-    # Example 3: Text Generation
-    print("Example 3: Text Generation")
-    print("-" * 50)
+        print(f"A: {answer}\n")
     
-    prompt = "เทคโนโลยีปัญญาประดิษฐ์ในปัจจุบัน"
-    generated = pipeline.generate_text(
-        prompt=prompt,
-        max_length=100,
-        num_return_sequences=2,
-        temperature=0.7
-    )
+    # Table QA
+    data = {
+        'จังหวัด': ['กรุงเทพ', 'เชียงใหม่', 'ภูเก็ต'],
+        'ประชากร': ['8.2 ล้าน', '1.7 ล้าน', '0.4 ล้าน'],
+        'พื้นที่': ['1,569 ตร.กม.', '20,107 ตร.กม.', '543 ตร.กม.']
+    }
+    df = pd.DataFrame(data)
     
-    print("Prompt:", prompt)
-    print("\nGenerated Text 1:", generated[0])
-    print("Generated Text 2:", generated[1])
-    print("\n")
-    
-    # Example 4: Fill-Mask
-    print("Example 4: Fill-Mask")
-    print("-" * 50)
-    
-    masked_text = "ประเทศไทยมี[MASK]ที่หลากหลาย"
-    predictions = pipeline.fill_mask(
-        text=masked_text,
-        top_k=3
-    )
-    
-    print("Masked Text:", masked_text)
-    print("\nTop Predictions:")
-    for pred in predictions:
-        print(f"- {pred['token']} (score: {pred['score']:.2f})")
-    print("\n")
-    
-    # Example 5: Text Similarity
-    print("Example 5: Text Similarity")
-    print("-" * 50)
-    
-    text1 = "ร้านอาหารนี้อร่อยมาก"
-    text2 = "อาหารที่ร้านนี้รสชาติดีมาก"
-    text3 = "วันนี้อากาศร้อนมาก"
-    
-    similarity = pipeline.calculate_similarity(text1, text2)
-    print(f"Similarity between:\n'{text1}' and\n'{text2}'")
-    print(f"Score: {similarity:.2f}\n")
-    
-    similarity = pipeline.calculate_similarity(text1, text3)
-    print(f"Similarity between:\n'{text1}' and\n'{text3}'")
-    print(f"Score: {similarity:.2f}\n")
-    
-    # Example 6: Document Search
-    print("Example 6: Document Search")
-    print("-" * 50)
-    
-    documents = [
-        "กรุงเทพมหานครเป็นเมืองหลวงของประเทศไทย",
-        "เชียงใหม่เป็นจังหวัดทางภาคเหนือของประเทศไทย",
-        "ภูเก็ตเป็นจังหวัดท่องเที่ยวทางภาคใต้",
-        "อยุธยาเคยเป็นราชธานีเก่าของไทย",
+    print("Table QA:")
+    questions = [
+        "กรุงเทพมีประชากรเท่าไร?",
+        "จังหวัดไหนมีพื้นที่มากที่สุด?",
     ]
+    for question in questions:
+        answer = nlp.answer_question(question, df)
+        print(f"Q: {question}")
+        print(f"A: {answer}\n")
     
-    query = "เมืองหลวงของประเทศไทย"
-    similar_docs = pipeline.find_similar_texts(
-        query=query,
-        candidates=documents,
-        top_k=2
-    )
+    print("=== Text Generation ===")
+    prompts = [
+        "วันนี้อากาศ",
+        "ประเทศไทยเป็น"
+    ]
+    for prompt in prompts:
+        generated = nlp.generate(prompt, num_sequences=2)
+        print(f"\nPrompt: {prompt}")
+        for i, text in enumerate(generated, 1):
+            print(f"Generated {i}: {text}")
     
-    print("Query:", query)
-    print("\nMost Similar Documents:")
-    for doc, score in similar_docs:
-        print(f"- {doc} (score: {score:.2f})")
-    print("\n")
+    print("\n=== Text Similarity ===")
+    text1 = "วันนี้อากาศดีมาก"
+    text2 = "ท้องฟ้าสดใสวันนี้"
+    text3 = "ราคาหุ้นลดลง"
     
-    # Example 7: Cross-Lingual Capabilities
-    print("Example 7: Cross-Lingual Capabilities")
-    print("-" * 50)
+    print(f"Text 1: {text1}")
+    print(f"Text 2: {text2}")
+    print(f"Text 3: {text3}")
     
-    english_text = """
-    Thailand is a Southeast Asian country known for its beautiful beaches,
-    ornate temples, and rich culture. The capital city is Bangkok.
-    """
+    sim1 = nlp.get_similarity(text1, text2)
+    sim2 = nlp.get_similarity(text1, text3)
     
-    # Translate to Thai
-    thai_translation = pipeline.translate(
-        text=english_text,
-        source_lang='en',
-        target_lang='th'
-    )
-    print("English Text:", english_text)
-    print("\nThai Translation:", thai_translation)
-    
-    # Generate Thai summary
-    thai_summary = pipeline.summarize(
-        text=thai_translation,
-        ratio=0.5
-    )
-    print("\nThai Summary:", thai_summary)
-    
-    # Translate summary back to English
-    english_summary = pipeline.translate(
-        text=thai_summary,
-        source_lang='th',
-        target_lang='en'
-    )
-    print("\nEnglish Summary:", english_summary)
+    print(f"\nSimilarity 1-2: {sim1:.3f}")
+    print(f"Similarity 1-3: {sim2:.3f}")
 
 if __name__ == "__main__":
     main()
