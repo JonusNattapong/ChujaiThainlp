@@ -3,6 +3,7 @@
 ## Files to Remove
 
 1. Redundant Files:
+
 - `thainlp/thai_spell_correction.py` (integrated into tokenizer)
 - `thainlp/tag.py` (moved to classification)
 - `thainlp/pos_tagging/hmm_tagger.py` (replaced by transformer models)
@@ -21,6 +22,7 @@
 ## Files to Move
 
 1. Models:
+
 - Move token classification to `models/classification/`
 - Move QA components to `models/qa/`
 - Move text generation to `models/generation/`
@@ -29,11 +31,13 @@
 - Move similarity to `models/similarity/`
 
 2. Utils:
+
 - Move monitoring to `utils/monitoring.py`
 - Move Thai utilities to `utils/thai_utils.py`
 - Move resource loading to `utils/resources.py`
 
 3. Tests:
+
 - Reorganize tests to mirror source structure
 - Move all test files to appropriate subdirectories
 - Update test imports
@@ -41,11 +45,13 @@
 ## New Files Created
 
 1. Core Components:
+
 - `thainlp/core/transformers.py`
 - `thainlp/core/base.py`
 - `thainlp/core/utils.py`
 
 2. Models:
+
 - `thainlp/models/classification/token_classifier.py`
 - `thainlp/models/qa/text_qa.py`
 - `thainlp/models/qa/table_qa.py`
@@ -56,14 +62,17 @@
 - `thainlp/models/similarity/sentence_similarity.py`
 
 3. Tokenization:
+
 - `thainlp/tokenization/tokenizer.py`
 - `thainlp/tokenization/maximum_matching.py`
 
 4. Utils:
+
 - `thainlp/utils/monitoring.py`
 - `thainlp/utils/thai_utils.py`
 
 5. Pipeline:
+
 - `thainlp/pipelines/pipeline.py`
 
 ## Directory Structure
@@ -100,21 +109,25 @@ ChujaiThainlp/
 ## Benefits of New Structure
 
 1. Better Organization:
+
 - Clear separation of concerns
 - Logical grouping of components
 - Easier to maintain and extend
 
 2. Improved Maintainability:
+
 - Less code duplication
 - Clear dependencies
 - Better test organization
 
 3. Better User Experience:
+
 - Simpler import paths
 - Consistent interfaces
 - Clear documentation
 
 4. Reduced Complexity:
+
 - Fewer files to maintain
 - Clearer responsibility boundaries
 - Easier to understand
