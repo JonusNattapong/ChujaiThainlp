@@ -7,7 +7,7 @@ import pandas as pd
 from transformers import (
     AutoTokenizer, 
     AutoModelForQuestionAnswering,
-    AutoModelForSeq2SeqGeneration
+    AutoModelForSeq2SeqLM
 )
 from sentence_transformers import SentenceTransformer, util
 from ..core.transformers import TransformerBase
@@ -48,7 +48,7 @@ class QuestionAnswering(TransformerBase):
         self.retriever = SentenceTransformer(retriever_model).to(device)
         
         # Table QA model
-        self.table_model = AutoModelForSeq2SeqGeneration.from_pretrained(
+        self.table_model = AutoModelForSeq2SeqLM.from_pretrained(
             "google/tapas-large-finetuned-wtq"
         ).to(device)
         self.table_tokenizer = AutoTokenizer.from_pretrained(
@@ -433,3 +433,102 @@ class QuestionAnswering(TransformerBase):
                 avg_val_loss = val_loss / len(val_data)
                 print(f"Validation Loss: {avg_val_loss:.4f}")
                 self.model.train()
+
+# Define ThaiQuestionAnswering class as a wrapper around QuestionAnswering
+class ThaiQuestionAnswering(QuestionAnswering):
+    """
+    Thai Question Answering class, specialized for Thai language text
+    """
+    
+    def __init__(self, 
+                 model_name: str = "monsoon-nlp/bert-base-thai-squad",  # Thai-specific default
+                 retriever_model: str = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
+                 device: str = "cuda" if torch.cuda.is_available() else "cpu",
+                 batch_size: int = 8,
+                 max_seq_length: int = 384,
+                 doc_stride: int = 128):
+        """Initialize Thai QA model
+        
+        Args:
+            model_name: Name of QA model optimized for Thai
+            retriever_model: Model for passage retrieval
+            device: Device to run model on
+            batch_size: Batch size for processing
+            max_seq_length: Maximum sequence length
+            doc_stride: Stride for document processing
+        """
+        super().__init__(
+            model_name=model_name,
+            retriever_model=retriever_model,
+            device=device,
+            batch_size=batch_size,
+            max_seq_length=max_seq_length,
+            doc_stride=doc_stride
+        )
+        
+    def preprocess_thai_text(self, text: str) -> str:
+        """Preprocess Thai text for better QA performance
+        
+        Args:
+            text: Thai text to preprocess
+            
+        Returns:
+            Preprocessed text
+        """
+        # Simple preprocessing for now - can be expanded with Thai-specific logic
+        return text.strip()
+        
+    def answer_question(self,
+                       question: Union[str, List[str]],
+                       context: Union[str, pd.DataFrame],
+                       max_answer_len: int = 100,
+                       return_scores: bool = True,
+                       num_answers: int = 1) -> Union[Dict, List[Dict]]:
+        """Answer questions using either text or table context, with Thai preprocessing
+        
+        Args:
+            question: Question or list of questions
+            context: Text passage or pandas DataFrame
+            max_answer_len: Maximum answer length
+            return_scores: Whether to return confidence scores
+            num_answers: Number of answers to return per question
+            
+        Returns:
+            Dict or list of dicts containing:
+            - answer: Extracted answer text
+            - score: Confidence score (if return_scores=True)
+            - start: Start position in context (text QA only)
+            - end: End position in context (text QA only)
+        """
+        # Preprocess Thai text
+        if isinstance(question, str):
+            question = self.preprocess_thai_text(question)
+        else:
+            question = [self.preprocess_thai_text(q) for q in question]
+            
+        if isinstance(context, str):
+            context = self.preprocess_thai_text(context)
+            
+        # Call parent implementation
+        return super().answer_question(
+            question=question,
+            context=context,
+            max_answer_len=max_answer_len,
+            return_scores=return_scores,
+            num_answers=num_answers
+        )
+
+# Module level function
+def answer_question(question: str, context: str, **kwargs) -> Dict:
+    """Answer a question based on context
+    
+    Args:
+        question: Question to answer
+        context: Text or table to find answer in
+        **kwargs: Additional arguments to pass to ThaiQuestionAnswering
+        
+    Returns:
+        Dictionary with answer and metadata
+    """
+    qa = ThaiQuestionAnswering()
+    return qa.answer_question(question, context, **kwargs)
