@@ -1,36 +1,12 @@
-from prometheus_client import Counter, Histogram, Gauge, start_http_server
-from opentelemetry import trace, metrics
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
-from opentelemetry.sdk.metrics import MeterProvider
-from opentelemetry.sdk.metrics.export import ConsoleMetricExporter, PeriodicExportingMetricReader
+"""
+Simple monitoring module for Thai NLP
+This is a simplified version that doesn't require external dependencies
+"""
 import time
 import functools
-from typing import Dict, List, Optional
-import psutil
+from typing import Dict, List, Optional, Any
 import logging
 from datetime import datetime
-
-# Prometheus metrics
-REQUESTS_TOTAL = Counter('thainlp_requests_total', 'Total requests processed')
-PROCESSING_TIME = Histogram('thainlp_processing_seconds', 'Time spent processing request')
-MEMORY_USAGE = Gauge('thainlp_memory_usage_bytes', 'Memory usage in bytes')
-CPU_USAGE = Gauge('thainlp_cpu_usage_percent', 'CPU usage percentage')
-
-# OpenTelemetry setup
-trace.set_tracer_provider(TracerProvider())
-metrics.set_meter_provider(MeterProvider())
-tracer = trace.get_tracer(__name__)
-meter = metrics.get_meter(__name__)
-
-# Export traces
-trace.get_tracer_provider().add_span_processor(
-    BatchSpanProcessor(ConsoleSpanExporter())
-)
-
-# Export metrics
-reader = PeriodicExportingMetricReader(ConsoleMetricExporter())
-metrics.get_meter_provider().add_reader(reader)
 
 # Setup logging
 logging.basicConfig(
@@ -39,6 +15,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Basic health status constants
 class HealthStatus:
     OK = "ok"
     WARNING = "warning"
@@ -51,17 +28,75 @@ class ServiceHealth:
         self.last_check = datetime.utcnow()
         self.details: Dict = {}
 
+class ProgressTracker:
+    """Simple progress tracker"""
+    
+    def __init__(self, total: int = 0):
+        """Initialize progress tracker"""
+        self.total = total
+        self.current = 0
+        self.start_time = None
+        self.end_time = None
+        
+    def start_task(self, total: int = None):
+        """Start tracking a task"""
+        if total is not None:
+            self.total = total
+        self.current = 0
+        self.start_time = time.time()
+        return self
+        
+    def update(self, increment: int = 1):
+        """Update progress"""
+        self.current += increment
+        return self
+        
+    def end_task(self):
+        """End the task"""
+        self.end_time = time.time()
+        return self
+        
+    @property
+    def progress(self) -> float:
+        """Get progress as percentage"""
+        if self.total == 0:
+            return 100.0
+        return min(100.0, self.current / self.total * 100)
+        
+    @property
+    def elapsed(self) -> float:
+        """Get elapsed time in seconds"""
+        if self.start_time is None:
+            return 0.0
+        end = self.end_time if self.end_time else time.time()
+        return end - self.start_time
+    
+    @property
+    def remaining(self) -> float:
+        """Estimate remaining time in seconds"""
+        if self.progress == 0:
+            return float('inf')
+        if self.progress >= 100:
+            return 0.0
+        elapsed = self.elapsed
+        return (elapsed / self.progress) * (100 - self.progress)
+        
+    def __str__(self) -> str:
+        """String representation of progress"""
+        return f"{self.progress:.1f}% ({self.current}/{self.total})"
+
 class PerformanceMonitor:
+    """Simple performance monitor"""
+    
     def __init__(self):
         self.start_time = None
-        self._request_counter = meter.create_counter(
-            "requests",
-            description="Number of requests"
-        )
-        self._duration_histogram = meter.create_histogram(
-            "duration",
-            description="Request duration"
-        )
+        self.metrics = {
+            "total_requests": 0,
+            "successful_requests": 0, 
+            "failed_requests": 0,
+            "average_time": 0,
+            "total_time": 0,
+        }
         
     def __enter__(self):
         self.start_time = time.time()
@@ -69,45 +104,51 @@ class PerformanceMonitor:
         
     def __exit__(self, exc_type, exc_val, exc_tb):
         duration = time.time() - self.start_time
-        PROCESSING_TIME.observe(duration)
-        self._duration_histogram.record(duration)
+        self.metrics["total_time"] += duration
+        self.metrics["total_requests"] += 1
         
-    def track_request(self):
-        REQUESTS_TOTAL.inc()
-        self._request_counter.add(1)
+        # Update average
+        self.metrics["average_time"] = (
+            self.metrics["total_time"] / self.metrics["total_requests"]
+        )
+        
+        if exc_type:
+            self.metrics["failed_requests"] += 1
+        else:
+            self.metrics["successful_requests"] += 1
+        
+    def track_request(self, success: bool = True):
+        """Track a request"""
+        self.metrics["total_requests"] += 1
+        if success:
+            self.metrics["successful_requests"] += 1
+        else:
+            self.metrics["failed_requests"] += 1
 
-class SystemMonitor:
+class ResourceMonitor:
+    """Simple system resource monitor"""
+    
     def __init__(self):
         self.services: Dict[str, ServiceHealth] = {}
+        self.measurements: List[Dict[str, Any]] = []
         
     def update_metrics(self):
-        """อัพเดทข้อมูล metrics ของระบบ"""
-        MEMORY_USAGE.set(psutil.Process().memory_info().rss)
-        CPU_USAGE.set(psutil.cpu_percent())
-        
+        """Update system metrics"""
+        # No dependency on psutil, could implement later
+        pass
+            
     def check_service_health(self, service_name: str) -> ServiceHealth:
-        """ตรวจสอบสถานะของ service"""
+        """Check service health"""
         if service_name not in self.services:
             self.services[service_name] = ServiceHealth(service_name)
             
         service = self.services[service_name]
-        
-        try:
-            # ทำการตรวจสอบ service ตามความเหมาะสม
-            service.last_check = datetime.utcnow()
-            service.status = HealthStatus.OK
-        except Exception as e:
-            service.status = HealthStatus.ERROR
-            service.details["error"] = str(e)
-            logger.error(f"Service {service_name} health check failed: {e}")
-            
+        service.last_check = datetime.utcnow()
         return service
     
     def get_system_health(self) -> Dict:
-        """ดึงข้อมูลสถานะของระบบทั้งหมด"""
+        """Get all system health metrics"""
         return {
-            "memory_usage": psutil.Process().memory_info().rss,
-            "cpu_usage": psutil.cpu_percent(),
             "services": {
                 name: {
                     "status": service.status,
@@ -119,31 +160,25 @@ class SystemMonitor:
         }
 
 def start_monitoring(port: int = 8000):
-    """เริ่มต้นระบบ monitoring"""
-    start_http_server(port)
-    logger.info(f"Monitoring server started on port {port}")
+    """Start monitoring server stub"""
+    logger.info(f"Simplified monitoring enabled (without server)")
 
 def monitor_performance(func):
-    """Decorator สำหรับติดตามประสิทธิภาพของฟังก์ชัน"""
+    """Decorator for function performance monitoring"""
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        REQUESTS_TOTAL.inc()
-        with PROCESSING_TIME.time(), tracer.start_as_current_span(func.__name__) as span:
-            start_time = time.time()
-            
-            try:
-                result = func(*args, **kwargs)
-                status = "success"
-            except Exception as e:
-                status = "error"
-                span.set_attribute("error", str(e))
-                logger.error(f"Error in {func.__name__}: {e}")
-                raise
-            finally:
-                duration = time.time() - start_time
-                span.set_attribute("duration", duration)
-                span.set_attribute("function", func.__name__)
-                span.set_attribute("status", status)
-            
+        start_time = time.time()
+        
+        try:
+            result = func(*args, **kwargs)
+            status = "success"
             return result
-    return wrapper 
+        except Exception as e:
+            status = "error"
+            logger.error(f"Error in {func.__name__}: {e}")
+            raise
+        finally:
+            duration = time.time() - start_time
+            logger.debug(f"Function {func.__name__} completed in {duration:.4f}s with status: {status}")
+            
+    return wrapper
