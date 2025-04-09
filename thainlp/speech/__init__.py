@@ -8,6 +8,9 @@ Includes:
 - Voice processing/conversion
 - Audio utilities
 """
+import numpy as np
+from typing import Union
+
 from .tts import ThaiTTS
 from .asr import ThaiASR
 from .voice_activity import VoiceActivityDetector

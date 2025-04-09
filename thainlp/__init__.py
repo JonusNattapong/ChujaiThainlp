@@ -21,6 +21,17 @@ from .ner import (
     tag as ner_tag
 )
 
+# Dialect support
+from .dialects import (
+    ThaiDialectProcessor,
+    DialectTokenizer,
+    detect_dialect,
+    translate_to_standard,
+    translate_from_standard,
+    get_dialect_features,
+    get_dialect_info
+)
+
 # Sentiment Analysis
 from .sentiment import (
     ThaiSentimentAnalyzer,
@@ -100,6 +111,7 @@ _default_ner = None
 _default_sentiment = None
 _default_qa = None
 _default_generator = None
+_default_dialect_processor = None
 
 def get_pipeline(**kwargs) -> ThaiNLPPipeline:
     """Get or create default pipeline instance"""
@@ -137,6 +149,13 @@ def generate(prompt: str, **kwargs) -> str:
         _default_generator = ThaiTextGenerator()
     return _default_generator.generate_text(prompt, **kwargs)
 
+def get_dialect_processor() -> ThaiDialectProcessor:
+    """Get or create default dialect processor instance"""
+    global _default_dialect_processor
+    if _default_dialect_processor is None:
+        _default_dialect_processor = ThaiDialectProcessor()
+    return _default_dialect_processor
+
 # Package info
 __author__ = "ThaiNLP"
 __email__ = "contact@thainlp.org"
@@ -155,6 +174,16 @@ __all__ = [
     "get_thai_tokenizer",
     "ThaiTokenizer",
     "MaximumMatchingTokenizer",
+    
+    # Dialect support
+    "ThaiDialectProcessor",
+    "DialectTokenizer",
+    "detect_dialect",
+    "translate_to_standard", 
+    "translate_from_standard",
+    "get_dialect_features",
+    "get_dialect_info",
+    "get_dialect_processor",
     
     # NER
     "ThaiNamedEntityRecognition",
