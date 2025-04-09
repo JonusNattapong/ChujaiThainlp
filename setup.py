@@ -8,7 +8,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="chujaithai-nlp",
-    version="2.0.0",
+    version="0.5.0",
     author="ThaiNLP",
     author_email="contact@thainlp.org",
     description="Advanced Thai Natural Language Processing Library",
