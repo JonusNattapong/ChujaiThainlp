@@ -6,11 +6,12 @@ import torch
 import numpy as np
 from transformers import (
     AutoTokenizer, 
-    AutoModelForSeq2SeqGeneration,
+    AutoModelForSeq2SeqLM,
     M2M100Tokenizer,
     M2M100ForConditionalGeneration
 )
-from sacrebleu.metrics import BLEU
+# Remove sacrebleu dependency
+# from sacrebleu.metrics import BLEU
 from ..core.transformers import TransformerBase
 from ..tokenization import word_tokenize
 from ..extensions.monitoring import ProgressTracker
@@ -38,14 +39,14 @@ class Translator(TransformerBase):
             self.model = M2M100ForConditionalGeneration.from_pretrained(model_name).to(device)
             self.tokenizer = M2M100Tokenizer.from_pretrained(model_name)
         else:
-            self.model = AutoModelForSeq2SeqGeneration.from_pretrained(model_name).to(device)
+            self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(device)
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
             
         # Set up progress tracking
         self.progress = ProgressTracker()
         
-        # BLEU score calculator
-        self.bleu = BLEU()
+        # Remove BLEU score calculator that depends on sacrebleu
+        # self.bleu = BLEU()
         
     def translate(self,
                  text: Union[str, List[str]],
@@ -231,14 +232,31 @@ class Translator(TransformerBase):
         # Generate translations
         translations = self.translate(sources, source_lang, target_lang)
         
-        # Calculate BLEU score
-        bleu_score = self.bleu.corpus_score(
-            translations,
-            [references]
-        ).score
+        # Simple word overlap metric instead of BLEU score
+        scores = []
+        for trans, ref in zip(translations, references):
+            trans_words = set(trans.lower().split())
+            ref_words = set(ref.lower().split())
+            
+            if not ref_words:  # Avoid division by zero
+                scores.append(0.0)
+                continue
+                
+            # Calculate overlap
+            overlap = len(trans_words.intersection(ref_words))
+            precision = overlap / len(trans_words) if trans_words else 0
+            recall = overlap / len(ref_words) if ref_words else 0
+            
+            # F1 score
+            if precision + recall > 0:
+                f1 = 2 * precision * recall / (precision + recall)
+            else:
+                f1 = 0.0
+                
+            scores.append(f1)
         
         return {
-            'bleu': bleu_score / 100.0  # Normalize to 0-1
+            'word_overlap_f1': sum(scores) / len(scores) if scores else 0.0,
         }
     
     def fine_tune(self,
@@ -344,6 +362,6 @@ class Translator(TransformerBase):
                     source_lang,
                     target_lang
                 )
-                print(f"Validation BLEU: {val_metrics['bleu']:.4f}")
+                print(f"Validation F1: {val_metrics['word_overlap_f1']:.4f}")
                 
                 self.model.train()
