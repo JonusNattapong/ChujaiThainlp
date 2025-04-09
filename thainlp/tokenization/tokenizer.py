@@ -7,7 +7,7 @@ from transformers import AutoTokenizer
 from .maximum_matching import MaximumMatchingTokenizer
 from ..core.transformers import TransformerBase
 from ..utils.thai_utils import contains_thai, separate_thai_english
-
+import torch
 class ThaiTokenizer(TransformerBase):
     """Unified tokenizer supporting both Thai and English"""
     
