@@ -3,6 +3,7 @@ Multimodal pipeline for seamless processing across modalities
 """
 from typing import Dict, List, Union, Optional, Any, Tuple
 import os
+import torch
 from PIL import Image
 import numpy as np
 from .base import MultimodalBase
