@@ -1,192 +1,281 @@
 """
 Thai Dialect-Aware Tokenizer
 
-This module provides tokenization support for various Thai regional dialects,
-extending the standard ThaiTokenizer with dialect-specific capabilities.
+This module provides tokenization facilities that are aware of Thai dialects.
+It's capable of correctly tokenizing text in different Thai regional dialects.
 """
 
-from typing import List, Optional, Union, Dict, Any
 import re
+from typing import List, Dict, Any, Optional, Union, Set, Tuple
+from pathlib import Path
+import json
+
 from ..tokenization.tokenizer import ThaiTokenizer
-from ..tokenization.maximum_matching import MaximumMatchingTokenizer
-from .dialect_processor import DIALECTS, DIALECT_FEATURES, ThaiDialectProcessor
-from ..utils.thai_utils import normalize_text, separate_thai_english, contains_thai
-import torch
-class DialectTokenizer(ThaiTokenizer):
-    """Tokenizer with support for Thai dialects"""
+from ..utils.thai_utils import normalize_text
+from .dialect_processor import ThaiDialectProcessor, detect_dialect
+
+
+class DialectTokenizer:
+    """Tokenizer that accounts for Thai dialect variations"""
     
     def __init__(
         self,
-        model_name: str = "xlm-roberta-base",
-        device: str = "cuda" if torch.cuda.is_available() else "cpu",
-        use_thai_dict: bool = True,
-        dialect: str = "central"
+        tokenizer: Optional[ThaiTokenizer] = None,
+        dialect: Optional[str] = None,
+        auto_detect: bool = True,
+        data_dir: Optional[str] = None
     ):
-        """Initialize dialect-aware tokenizer
+        """Initialize dialect tokenizer
         
         Args:
-            model_name: Pretrained model name for subword tokenization
-            device: Device to run model on
-            use_thai_dict: Whether to use Thai dictionary for word segmentation
-            dialect: Default dialect to use (northern, northeastern, southern, central)
+            tokenizer: Base tokenizer for standard Thai
+            dialect: Specific dialect to use (if known)
+            auto_detect: Whether to auto-detect dialect
+            data_dir: Directory containing dialect data
         """
-        super().__init__(model_name, device, use_thai_dict)
+        # Initialize or use provided tokenizer
+        self.tokenizer = tokenizer or ThaiTokenizer()
         
-        # Initialize dialect resources
-        self.dialect = dialect if dialect in DIALECTS else "central"
+        # Initialize dialect processor
         self.dialect_processor = ThaiDialectProcessor()
         
-        # Load dialect-specific vocabulary
-        self._init_dialect_vocabulary()
-    
-    def _init_dialect_vocabulary(self):
-        """Initialize vocabulary specific to dialects"""
-        self.dialect_words = {}
+        # Set dialect if specified
+        self.dialect = dialect
+        self.auto_detect = auto_detect
         
-        for dialect, features in DIALECT_FEATURES.items():
-            # Extract all vocabulary words specific to this dialect
-            vocabulary = {}
-            
-            if "vocabulary" in features:
-                vocabulary.update(features["vocabulary"])
-            
-            # Add particles, pronouns, and modifiers
-            for category in ["particles", "pronouns", "verb_modifiers"]:
-                if category in features:
-                    for word in features[category]:
-                        vocabulary[word] = word  # Map to itself
-            
-            self.dialect_words[dialect] = vocabulary
-            
-        # Add dialect words to dictionary tokenizer if used
-        if self.thai_tokenizer:
-            for dialect, vocab in self.dialect_words.items():
-                for word in vocab:
-                    self.thai_tokenizer.add_custom_word(word)
-    
-    def set_dialect(self, dialect: str):
-        """Set the active dialect for tokenization
-        
-        Args:
-            dialect: Dialect code (northern, northeastern, southern, central)
-        """
-        if dialect in DIALECTS:
-            self.dialect = dialect
-    
-    def get_active_dialect(self) -> str:
-        """Get the currently active dialect
-        
-        Returns:
-            Active dialect code
-        """
-        return self.dialect
-    
-    def tokenize(self,
-                text: Union[str, List[str]],
-                dialect: Optional[str] = None,
-                mode: str = "word",
-                return_tensors: Optional[str] = None) -> Union[List[str], List[List[str]]]:
-        """Tokenize text based on dialect
-        
-        Args:
-            text: Text to tokenize
-            dialect: Override the default dialect
-            mode: Tokenization mode ('word' or 'subword')
-            return_tensors: Whether to return tensors and which format
-            
-        Returns:
-            List of tokens or list of token lists if input is a list
-        """
-        # Use specified dialect or default
-        active_dialect = dialect if dialect in DIALECTS else self.dialect
-        
-        # Handle list input
-        if isinstance(text, list):
-            return [self.tokenize(t, active_dialect, mode, return_tensors) for t in text]
-        
-        # Normalize input text
-        text = normalize_text(text)
-        
-        if mode == "word":
-            return self._word_tokenize_dialect(text, active_dialect)
+        # Configure data directory
+        if data_dir:
+            self.data_dir = Path(data_dir)
         else:
-            return self._subword_tokenize(text, return_tensors)
+            self.data_dir = Path(__file__).parent / "data"
+        self.data_dir.mkdir(exist_ok=True, parents=True)
+        
+        # Load dialect-specific token dictionaries
+        self.dialect_tokens = self._load_dialect_tokens()
+        
+    def _load_dialect_tokens(self) -> Dict[str, Set[str]]:
+        """Load dialect-specific tokens
+        
+        Returns:
+            Dictionary mapping dialect codes to sets of special tokens
+        """
+        tokens_file = self.data_dir / "dialect_tokens.json"
+        
+        if tokens_file.exists():
+            try:
+                with open(tokens_file, "r", encoding="utf-8") as f:
+                    loaded_tokens = json.load(f)
+                    
+                # Convert lists to sets for faster lookup
+                return {
+                    dialect: set(tokens)
+                    for dialect, tokens in loaded_tokens.items()
+                }
+            except Exception as e:
+                print(f"Error loading dialect tokens: {e}")
+        
+        # Default dialect tokens
+        return {
+            "northern": set(["เจ้า", "กำ", "ก้อ", "ละ", "เน้อ", "กา", "ปั๋น", "เปิ้น", "อู้", "ใจ้", "เฮา"]),
+            "northeastern": set(["เด้อ", "สิ", "อีหลี", "อ้าย", "อีนาง", "เวา", "เบิ่ง", "กะ", "ข้อย"]),
+            "southern": set(["หนิ", "โหล", "แอ", "ไซ", "หรอย", "นัก", "วั่น", "ก่อ", "ยะ"]),
+            "pattani_malay": set(["มะ", "เลอ", "ยอ", "อาเกาะ", "เตะ", "มากัน", "เปอกี", "ตีโด"])
+        }
     
-    def _word_tokenize_dialect(self, text: str, dialect: str) -> List[str]:
-        """Tokenize text into words with dialect awareness
+    def tokenize(self, text: str) -> List[str]:
+        """Tokenize text with dialect awareness
         
         Args:
-            text: Text to tokenize
-            dialect: Dialect to use for tokenization
+            text: Thai text to tokenize, potentially in a dialect
             
         Returns:
             List of tokens
         """
         if not text:
             return []
-            
-        # Separate Thai and English segments
-        segments = separate_thai_english(text)
-        tokens = []
         
-        for segment in segments:
-            if contains_thai(segment):
-                # Use dialect-aware Thai word segmentation
-                if self.thai_tokenizer:
-                    # Add any dialect-specific words to the dictionary first
-                    dialect_vocab = self.dialect_words.get(dialect, {})
-                    for word in dialect_vocab:
-                        if word in segment and len(word) > 1:
-                            self.thai_tokenizer.add_custom_word(word)
-                    
-                    # Use the enhanced tokenizer
-                    tokens.extend(self.thai_tokenizer.tokenize(segment))
-                else:
-                    # Fallback to character tokenization for Thai
-                    tokens.extend(list(segment))
-            else:
-                # Use regex for English word boundaries
-                tokens.extend(self.eng_word_pattern.findall(segment))
+        # Normalize text
+        text = normalize_text(text)
+        
+        # Detect dialect if auto_detect is True and dialect is not specified
+        detected_dialect = None
+        if self.auto_detect and not self.dialect:
+            dialect_scores = self.dialect_processor.detect_dialect(text)
+            detected_dialect = max(dialect_scores.items(), key=lambda x: x[1])[0]
+        else:
+            detected_dialect = self.dialect or "central"
+            
+        # If it's central Thai, use standard tokenizer
+        if detected_dialect == "central":
+            return self.tokenizer.word_tokenize(text)
+            
+        # Get dialect-specific tokens
+        dialect_tokens = self.dialect_tokens.get(detected_dialect, set())
+        
+        # Add dialect-specific tokens to the tokenizer's dictionary
+        # and preserve the original dictionary to restore later
+        original_dict = None
+        if hasattr(self.tokenizer, 'custom_dict'):
+            original_dict = self.tokenizer.custom_dict.copy()
+            for token in dialect_tokens:
+                self.tokenizer.custom_dict.add(token)
                 
+        # Tokenize with the augmented dictionary
+        tokens = self.tokenizer.word_tokenize(text)
+        
+        # Restore original dictionary if modified
+        if original_dict is not None:
+            self.tokenizer.custom_dict = original_dict
+            
         return tokens
-    
-    def detect_and_tokenize(self, text: str, mode: str = "word") -> Dict[str, Any]:
-        """Automatically detect dialect and tokenize accordingly
+        
+    def tokenize_and_preserve_dialectal(self, text: str) -> List[Tuple[str, str]]:
+        """Tokenize and mark dialect-specific tokens
         
         Args:
-            text: Text to analyze and tokenize
-            mode: Tokenization mode ('word' or 'subword')
+            text: Thai text to tokenize, potentially in a dialect
             
         Returns:
-            Dictionary with detected dialect and tokens
+            List of (token, dialect|None) tuples
         """
-        # Detect dialect
-        dialect_scores = self.dialect_processor.detect_dialect(text)
-        detected_dialect = max(dialect_scores, key=lambda k: dialect_scores[k])
+        if not text:
+            return []
+            
+        # Get tokens
+        tokens = self.tokenize(text)
         
-        # Tokenize using the detected dialect
-        tokens = self.tokenize(text, dialect=detected_dialect, mode=mode)
+        # Identify dialect-specific tokens
+        result = []
+        for token in tokens:
+            dialect_match = None
+            for dialect, dialect_tokens in self.dialect_tokens.items():
+                if token in dialect_tokens:
+                    dialect_match = dialect
+                    break
+                    
+            result.append((token, dialect_match))
+            
+        return result
         
-        return {
-            "dialect": detected_dialect,
-            "dialect_confidence": dialect_scores[detected_dialect],
-            "tokens": tokens,
-            "all_dialects": dialect_scores
-        }
-    
-    def add_dialect_words(self, dialect: str, words: List[str]):
-        """Add custom words for a specific dialect
+    def add_dialect_token(self, token: str, dialect: str) -> bool:
+        """Add a new dialect-specific token
         
         Args:
+            token: Token to add
             dialect: Dialect code
-            words: List of words to add
+            
+        Returns:
+            True if added successfully, False otherwise
         """
-        if dialect not in self.dialect_words:
-            self.dialect_words[dialect] = {}
+        if dialect not in self.dialect_tokens:
+            self.dialect_tokens[dialect] = set()
             
-        for word in words:
-            self.dialect_words[dialect][word] = word
+        # Add token
+        self.dialect_tokens[dialect].add(token)
+        
+        # Save updated tokens
+        return self._save_dialect_tokens()
+        
+    def _save_dialect_tokens(self) -> bool:
+        """Save dialect tokens to file
+        
+        Returns:
+            True if saved successfully
+        """
+        tokens_file = self.data_dir / "dialect_tokens.json"
+        
+        try:
+            # Convert sets to lists for JSON serialization
+            tokens_dict = {
+                dialect: list(tokens)
+                for dialect, tokens in self.dialect_tokens.items()
+            }
             
-            # Also add to tokenizer dictionary
-            if self.thai_tokenizer:
-                self.thai_tokenizer.add_custom_word(word)
+            with open(tokens_file, "w", encoding="utf-8") as f:
+                json.dump(tokens_dict, f, ensure_ascii=False, indent=2)
+                
+            return True
+        except Exception as e:
+            print(f"Error saving dialect tokens: {e}")
+            return False
+            
+    def count_dialect_specific_tokens(self, text: str) -> Dict[str, int]:
+        """Count dialect-specific tokens in text
+        
+        Args:
+            text: Text to analyze
+            
+        Returns:
+            Dictionary mapping dialect codes to token counts
+        """
+        if not text:
+            return {dialect: 0 for dialect in self.dialect_tokens}
+            
+        # Tokenize
+        tokens = self.tokenize(text)
+        
+        # Count dialect tokens
+        counts = {dialect: 0 for dialect in self.dialect_tokens}
+        
+        for token in tokens:
+            for dialect, dialect_tokens in self.dialect_tokens.items():
+                if token in dialect_tokens:
+                    counts[dialect] += 1
+                    
+        return counts
+        
+    def get_dialectal_diversity(self, text: str) -> float:
+        """Calculate dialectal diversity score
+        
+        Args:
+            text: Text to analyze
+            
+        Returns:
+            Dialectal diversity score (0.0-1.0)
+        """
+        if not text:
+            return 0.0
+            
+        # Count tokens by dialect
+        dialect_counts = self.count_dialect_specific_tokens(text)
+        
+        # Calculate total dialect tokens
+        total_dialect_tokens = sum(dialect_counts.values())
+        
+        if total_dialect_tokens == 0:
+            return 0.0
+            
+        # Count non-zero dialects
+        non_zero_dialects = sum(1 for count in dialect_counts.values() if count > 0)
+        
+        # Calculate diversity (normalized by number of dialects)
+        return non_zero_dialects / len(dialect_counts)
+
+
+# Module-level functions
+def tokenize_dialectal(text: str, dialect: Optional[str] = None) -> List[str]:
+    """Tokenize text with dialect awareness
+    
+    Args:
+        text: Thai text to tokenize
+        dialect: Dialect code (auto-detected if None)
+        
+    Returns:
+        List of tokens
+    """
+    tokenizer = DialectTokenizer(dialect=dialect)
+    return tokenizer.tokenize(text)
+
+def detect_dialect_from_tokens(tokens: List[str]) -> str:
+    """Detect dialect based on tokens
+    
+    Args:
+        tokens: List of tokens
+        
+    Returns:
+        Detected dialect code
+    """
+    # Convert tokens to space-separated text for detection
+    text = " ".join(tokens)
+    dialect_scores = detect_dialect(text)
+    return max(dialect_scores.items(), key=lambda x: x[1])[0]

@@ -12,6 +12,8 @@ import functools
 import pickle
 import lru
 import mmap
+import re
+import unicodedata
 
 class MemoryOptimizer:
     """Optimize memory usage"""
@@ -215,63 +217,201 @@ class BatchProcessor:
         return results
 
 class TextProcessor:
-    """Optimized text processing"""
+    """Optimize text processing operations for Thai NLP"""
     
-    def __init__(self):
-        self.word_cache = {}
-        self._lock = threading.Lock()
+    def __init__(self, cache_size: int = 1000):
+        """Initialize text processor
         
+        Args:
+            cache_size: Maximum size of preprocessing cache
+        """
+        self.cache_size = cache_size
+        self._preprocess_cache = {}
+    
+    @functools.lru_cache(maxsize=5000)
     def preprocess_text(self, text: str) -> str:
-        """Optimize text for processing"""
-        # Convert to lowercase for case-insensitive operations
-        text = text.lower()
+        """Preprocess text for efficient processing
         
-        # Remove redundant whitespace
-        text = ' '.join(text.split())
+        Args:
+            text: Text to preprocess
+            
+        Returns:
+            Preprocessed text
+        """
+        # Early return for empty text
+        if not text:
+            return ""
+            
+        # Check cache
+        if text in self._preprocess_cache:
+            return self._preprocess_cache[text]
+            
+        # Basic preprocessing
+        processed = text
         
-        return text
+        # Normalize Unicode
+        processed = unicodedata.normalize('NFC', processed)
         
-    @functools.lru_cache(maxsize=10000)
-    def get_word_info(self, word: str) -> Dict[str, Any]:
-        """Get cached word information"""
-        # This would normally do more complex processing
-        return {
-            'length': len(word),
-            'is_thai': all('\u0E00' <= c <= '\u0E7F' for c in word)
+        # Replace multiple spaces with a single space
+        processed = re.sub(r'\s+', ' ', processed)
+        
+        # Replace zero-width characters and certain control characters
+        processed = re.sub(r'[\u200b\u200c\u200d\u2060\ufeff]', '', processed)
+        
+        # Normalize Thai characters (full/half width)
+        # Replace Thai numerals with Arabic numerals
+        thai_digits = '๐๑๒๓๔๕๖๗๘๙'
+        arabic_digits = '0123456789'
+        for thai, arabic in zip(thai_digits, arabic_digits):
+            processed = processed.replace(thai, arabic)
+            
+        # Update cache (with size limit)
+        if len(self._preprocess_cache) >= self.cache_size:
+            # Clear half of the cache when full (the oldest entries)
+            remove_count = self.cache_size // 2
+            for _ in range(remove_count):
+                self._preprocess_cache.popitem(last=False)
+                
+        self._preprocess_cache[text] = processed
+        
+        return processed
+        
+    def normalize_thai_text(self, text: str) -> str:
+        """Normalize Thai text for better processing
+        
+        Args:
+            text: Thai text to normalize
+            
+        Returns:
+            Normalized text
+        """
+        # Apply preprocessing
+        text = self.preprocess_text(text)
+        
+        # Thai-specific normalization
+        # Replace various Thai forms of the same character
+        replacements = {
+            # Sara E variations
+            '\u0e40\u0e40': '\u0e40',  # Double Sara E
+            # Sara Ai variations
+            '\u0e44\u0e44': '\u0e44',  # Double Sara Ai
+            # Tone mark normalization
+            '\u0e4d\u0e48': '\u0e48\u0e4d',  # Reorder nikkhahit and tone
+            '\u0e4d\u0e49': '\u0e49\u0e4d',
+            '\u0e4d\u0e4a': '\u0e4a\u0e4d',
+            '\u0e4d\u0e4b': '\u0e4b\u0e4d',
         }
         
-    def process_text_file(
-        self,
-        file_path: str,
-        process_func: Callable
-    ) -> List[Any]:
-        """Process large text file efficiently"""
-        results = []
+        for old, new in replacements.items():
+            text = text.replace(old, new)
+            
+        return text
+    
+    def extract_thai_text(self, text: str) -> str:
+        """Extract only Thai script from mixed text
         
-        with open(file_path, 'r', encoding='utf-8') as f:
-            # Memory map the file for efficient reading
-            with mmap.mmap(
-                f.fileno(),
-                0,
-                access=mmap.ACCESS_READ
-            ) as mm:
-                # Process file in chunks
-                chunk_size = 1024 * 1024  # 1MB chunks
-                offset = 0
+        Args:
+            text: Mixed text
+            
+        Returns:
+            Only Thai script parts
+        """
+        # Match Thai Unicode range (Thai consonants, vowels, marks, digits)
+        thai_chars = re.findall(r'[\u0e00-\u0e7f]+', text)
+        return ' '.join(thai_chars)
+    
+    def is_thai_char(self, char: str) -> bool:
+        """Check if a character is Thai
+        
+        Args:
+            char: Character to check
+            
+        Returns:
+            True if the character is Thai
+        """
+        if not char:
+            return False
+        return '\u0e00' <= char <= '\u0e7f'
+    
+    def count_thai_chars(self, text: str) -> int:
+        """Count Thai characters in text
+        
+        Args:
+            text: Input text
+            
+        Returns:
+            Number of Thai characters
+        """
+        return sum(1 for char in text if self.is_thai_char(char))
+    
+    def get_thai_script_ratio(self, text: str) -> float:
+        """Calculate ratio of Thai script to total characters
+        
+        Args:
+            text: Input text
+            
+        Returns:
+            Ratio of Thai script (0.0-1.0)
+        """
+        if not text:
+            return 0.0
+            
+        total_chars = len(text.replace(' ', ''))
+        if total_chars == 0:
+            return 0.0
+            
+        thai_chars = self.count_thai_chars(text)
+        return thai_chars / total_chars
+    
+    def segment_by_script(self, text: str) -> List[Dict[str, Any]]:
+        """Segment text by script type
+        
+        Args:
+            text: Mixed script text
+            
+        Returns:
+            List of segments with script type and content
+        """
+        if not text:
+            return []
+            
+        segments = []
+        current_type = "other"
+        current_segment = ""
+        
+        for char in text:
+            if self.is_thai_char(char):
+                char_type = "thai"
+            elif char.isascii() and char.isalpha():
+                char_type = "latin"
+            elif char.isdigit() or char in "+-.,":
+                char_type = "digit"
+            elif char.isspace():
+                char_type = current_type  # Spaces keep the current type
+            else:
+                char_type = "other"
                 
-                while offset < mm.size():
-                    # Read chunk
-                    mm.seek(offset)
-                    chunk = mm.read(chunk_size).decode('utf-8')
-                    
-                    # Process chunk
-                    chunk_results = process_func(chunk)
-                    results.extend(chunk_results)
-                    
-                    # Update offset
-                    offset += chunk_size
-                    
-        return results
+            # Start a new segment if script type changed
+            if char_type != current_type and current_segment:
+                segments.append({
+                    "type": current_type,
+                    "text": current_segment
+                })
+                current_segment = char
+                current_type = char_type
+            else:
+                current_segment += char
+                if current_type == "other":
+                    current_type = char_type
+        
+        # Add the final segment
+        if current_segment:
+            segments.append({
+                "type": current_type,
+                "text": current_segment
+            })
+            
+        return segments
 
 class Optimizer:
     """Main optimization system"""
@@ -336,4 +476,4 @@ class Optimizer:
         # Cache result
         self.disk_cache.set(cache_key, result)
         
-        return result 
+        return result
