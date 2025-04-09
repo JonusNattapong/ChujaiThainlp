@@ -5,7 +5,6 @@
   <br>
   <a href="https://github.com/JonusNattapong/ChujaiThainlp/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/JonusNattapong/ChujaiThainlp"></a>
   <a href="https://github.com/JonusNattapong/ChujaiThainlp/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/JonusNattapong/ChujaiThainlp"></a>
-  <a href="https://pypi.org/project/chujaithai/"><img alt="PyPI" src="https://img.shields.io/pypi/v/chujaithai"></a>
   <a href="https://github.com/JonusNattapong/ChujaiThainlp/releases"><img alt="Release" src="https://img.shields.io/github/v/release/JonusNattapong/ChujaiThainlp"></a>
 </div>
 
