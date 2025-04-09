@@ -8,9 +8,9 @@ import re
 import numpy as np
 from typing import List, Dict, Tuple, Union
 from collections import Counter
-from thainlp.tokenize import word_tokenize, sentence_tokenize
+from thainlp.tokenization import word_tokenize, sentence_tokenize
 from thainlp.utils.thai_utils import normalize_text, get_thai_stopwords
-from thainlp.question_answering.qa_system import answer_question
+from thainlp.qa import answer_question
 import thainlp
 import pandas as pd
 import networkx as nx
