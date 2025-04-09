@@ -2,10 +2,11 @@
 TextRank Algorithm for Thai Text Summarization
 """
 
-from typing import List, Dict, Tuple, Set
+from typing import List, Dict, Tuple, Set, Union, Optional
 import numpy as np
 import re
 from collections import defaultdict
+from ..core.transformers import TransformerBase
 
 class ThaiTextRank:
     def __init__(self):
@@ -175,4 +176,88 @@ def summarize_text(text: str, num_sentences: int = 3) -> str:
         str: Summarized text
     """
     summarizer = ThaiTextRank()
-    return summarizer.summarize(text, num_sentences) 
+    return summarizer.summarize(text, num_sentences)
+
+class TextRankSummarizer(TransformerBase):
+    """TextRank based summarization for Thai text"""
+    
+    def __init__(self, damping: float = 0.85, max_iter: int = 100):
+        """
+        Initialize TextRankSummarizer
+        
+        Args:
+            damping: Damping factor for PageRank
+            max_iter: Maximum iterations for PageRank
+        """
+        super().__init__("textrank-summarizer")
+        self.textrank = ThaiTextRank()
+        self.damping = damping
+        self.max_iter = max_iter
+        
+    def summarize(
+        self, 
+        text: Union[str, List[str]],
+        ratio: float = 0.3,
+        min_length: Optional[int] = None,
+        max_length: Optional[int] = None,
+        return_scores: bool = False
+    ) -> Union[str, List[str], Tuple[str, float], List[Tuple[str, float]]]:
+        """
+        Generate summary using TextRank algorithm
+        
+        Args:
+            text: Input text or list of texts
+            ratio: Proportion of sentences to keep (0-1)
+            min_length: Minimum summary length
+            max_length: Maximum summary length
+            return_scores: Whether to return confidence scores
+            
+        Returns:
+            Generated summary or list of summaries
+        """
+        # Handle single string
+        if isinstance(text, str):
+            text = [text]
+            single_input = True
+        else:
+            single_input = False
+            
+        results = []
+        
+        for t in text:
+            # Split into sentences
+            sentences = self.textrank._split_sentences(t)
+            
+            if not sentences:
+                results.append((t, 1.0) if return_scores else t)
+                continue
+                
+            # Calculate number of sentences based on ratio
+            num_sentences = max(1, int(len(sentences) * ratio))
+            
+            # Apply length constraints if provided
+            if max_length and len(t) > max_length:
+                num_sentences = min(num_sentences, max(1, int(max_length / (len(t) / len(sentences)))))
+                
+            if min_length and len(t) < min_length:
+                # If text is shorter than min_length, return the original
+                results.append((t, 1.0) if return_scores else t)
+                continue
+            
+            # Generate summary
+            summary = self.textrank.summarize(t, num_sentences=num_sentences)
+            
+            # Calculate confidence score (average PageRank score)
+            if return_scores:
+                similarity_matrix = self.textrank._build_similarity_matrix(sentences)
+                scores = self.textrank._pagerank(similarity_matrix, damping=self.damping, max_iter=self.max_iter)
+                avg_score = float(np.mean(scores))
+                results.append((summary, avg_score))
+            else:
+                results.append(summary)
+                
+        return results[0] if single_input else results
+        
+    def __call__(self, text, **kwargs):
+        """Alias for summarize method"""
+        return self.summarize(text, **kwargs)
