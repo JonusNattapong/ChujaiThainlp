@@ -7,7 +7,7 @@ import torch
 from sklearn.feature_extraction.text import TfidfVectorizer
 from transformers import (
     AutoTokenizer,
-    AutoModelForSeq2SeqGeneration,
+    AutoModelForSeq2SeqLM,
     PreTrainedTokenizer
 )
 from rouge_score import rouge_scorer
@@ -58,7 +58,7 @@ class Summarizer(TransformerBase):
         
         # Initialize components based on method
         if method == "abstractive":
-            self.model = AutoModelForSeq2SeqGeneration.from_pretrained(model_name).to(device)
+            self.model = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(device)
             self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         else:
             self.vectorizer = TfidfVectorizer(
