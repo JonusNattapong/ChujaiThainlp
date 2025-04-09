@@ -9,6 +9,7 @@ from ..sentiment import ThaiSentimentAnalyzer
 from ..qa import ThaiQuestionAnswering, TableQuestionAnswering
 from ..generation import ThaiTextGenerator
 from ..similarity import ThaiTextAnalyzer
+from ..dialects import ThaiDialectProcessor, DialectTokenizer
 from ..utils.thai_utils import normalize_text, clean_thai_text
 
 class ThaiNLPPipeline:
@@ -32,20 +33,21 @@ class ThaiNLPPipeline:
         
         # Text generation
         text = nlp.generate("วันนี้อากาศ")
+        
+        # Dialect processing
+        dialect = nlp.detect_dialect("ข้อยสิไปตลาด")
     """
     
     def __init__(self, 
                  load_all: bool = False,
                  device: str = "cuda"):
-        """Initialize pipeline components
+        """Initialize pipeline
         
         Args:
             load_all: Whether to load all components at initialization
-            device: Device to run models on ("cuda" or "cpu")
+            device: Device to use for models
         """
         self.device = device
-        
-        # Initialize components as None
         self._tokenizer = None
         self._ner = None
         self._sentiment = None
@@ -53,15 +55,20 @@ class ThaiNLPPipeline:
         self._table_qa = None
         self._generator = None
         self._analyzer = None
+        self._dialect_processor = None
+        self._dialect_tokenizer = None
         
+        # Load components if requested
         if load_all:
-            # Load all components
             self.get_tokenizer()
             self.get_ner()
             self.get_sentiment()
             self.get_qa()
+            self.get_table_qa()
             self.get_generator()
             self.get_analyzer()
+            self.get_dialect_processor()
+            self.get_dialect_tokenizer()
 
     def get_tokenizer(self):
         """Get or initialize tokenizer"""
@@ -105,6 +112,18 @@ class ThaiNLPPipeline:
         if self._analyzer is None:
             self._analyzer = ThaiTextAnalyzer()
         return self._analyzer
+
+    def get_dialect_processor(self):
+        """Get or initialize dialect processor"""
+        if self._dialect_processor is None:
+            self._dialect_processor = ThaiDialectProcessor()
+        return self._dialect_processor
+
+    def get_dialect_tokenizer(self):
+        """Get or initialize dialect-aware tokenizer"""
+        if self._dialect_tokenizer is None:
+            self._dialect_tokenizer = DialectTokenizer()
+        return self._dialect_tokenizer
 
     def tokenize(self, text: str) -> List[str]:
         """Tokenize Thai text into words"""
@@ -151,6 +170,74 @@ class ThaiNLPPipeline:
         """Calculate semantic similarity between texts"""
         return self.get_analyzer().semantic_similarity(text1, text2)
         
+    def detect_dialect(self, text: str) -> Dict[str, float]:
+        """Detect Thai dialect in text
+        
+        Args:
+            text: Thai text to analyze
+            
+        Returns:
+            Dictionary mapping dialect codes to confidence scores
+        """
+        return self.get_dialect_processor().detect_dialect(text)
+        
+    def tokenize_with_dialect(self, 
+                             text: str, 
+                             dialect: Optional[str] = None,
+                             auto_detect: bool = False) -> Union[List[str], Dict[str, Any]]:
+        """Tokenize text with dialect awareness
+        
+        Args:
+            text: Text to tokenize
+            dialect: Specific dialect to use (northern, northeastern, southern, central)
+            auto_detect: Whether to automatically detect the dialect
+            
+        Returns:
+            If auto_detect is True, returns a dictionary with dialect information and tokens.
+            Otherwise, returns a list of tokens.
+        """
+        tokenizer = self.get_dialect_tokenizer()
+        
+        if auto_detect:
+            return tokenizer.detect_and_tokenize(text)
+        else:
+            return tokenizer.tokenize(text, dialect=dialect)
+            
+    def translate_dialect(self, 
+                         text: str, 
+                         source_dialect: Optional[str] = None,
+                         target_dialect: str = "central",
+                         auto_detect: bool = False) -> str:
+        """Translate between Thai dialects
+        
+        Args:
+            text: Text to translate
+            source_dialect: Source dialect code (if None and auto_detect is True, will be detected)
+            target_dialect: Target dialect code
+            auto_detect: Whether to automatically detect the source dialect
+            
+        Returns:
+            Translated text
+        """
+        processor = self.get_dialect_processor()
+        
+        # Auto-detect source dialect if needed
+        if source_dialect is None and auto_detect:
+            dialect_scores = processor.detect_dialect(text)
+            source_dialect = max(dialect_scores, key=lambda k: dialect_scores[k])
+        
+        # If translating to standard Thai
+        if target_dialect == "central":
+            return processor.translate_to_standard(text, source_dialect)
+        
+        # If translating from standard Thai to dialect
+        if source_dialect == "central":
+            return processor.translate_from_standard(text, target_dialect)
+            
+        # If translating between dialects, go through standard Thai
+        std_text = processor.translate_to_standard(text, source_dialect)
+        return processor.translate_from_standard(std_text, target_dialect)
+    
     def preprocess(self, text: str, normalize: bool = True) -> str:
         """Preprocess Thai text
         
@@ -173,7 +260,7 @@ class ThaiNLPPipeline:
         Args:
             text: Input text
             tasks: List of tasks to perform, options:
-                  ["tokenize", "ner", "sentiment", "preprocess"]
+                  ["tokenize", "ner", "sentiment", "preprocess", "dialect"]
                   If None, performs all tasks
                   
         Returns:
@@ -195,5 +282,13 @@ class ThaiNLPPipeline:
             
         if "sentiment" in tasks:
             results["sentiment"] = self.analyze_sentiment(text)
+            
+        if "dialect" in tasks:
+            # Include dialect detection
+            results["dialect"] = self.detect_dialect(text)
+            
+            # Include dialect-aware tokenization
+            dialect_tokens = self.tokenize_with_dialect(text, auto_detect=True)
+            results["dialect_tokenization"] = dialect_tokens
             
         return results
