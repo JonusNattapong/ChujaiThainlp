@@ -18,9 +18,11 @@ from thainlp.dialects import (
     detect_dialect,
     translate_to_standard
 )
+from .privacy.model_handler import PrivacyModelHandler
 
 class PrivacyPreservingNLP:
-    def __init__(self, epsilon=0.1, noise_scale=0.1, handle_dialects=True, validation_threshold=0.95):
+    def __init__(self, epsilon=0.1, noise_scale=0.1, handle_dialects=True, validation_threshold=0.95,
+                 model_path: str = None, auto_update: bool = True):
         """
         คลาสสำหรับการประมวลผล NLP แบบปกป้องความเป็นส่วนตัว
         
@@ -38,10 +40,19 @@ class PrivacyPreservingNLP:
         self.dialect_processor = ThaiDialectProcessor() if handle_dialects else None
         self.dialect_tokenizer = DialectTokenizer() if handle_dialects else None
         
+        self.model_path = model_path
+        self.auto_update = auto_update
         self.validation_threshold = validation_threshold
-        
-        # ค่าความน่าจะเป็นสำหรับการตรวจสอบแบบ fuzzy
         self.fuzzy_threshold = 0.85
+        
+        # โหลดโมเดลถ้ามีการระบุ path
+        if model_path:
+            self._load_model()
+        
+        # สร้างตัวนับสำหรับการปรับปรุงโมเดล
+        self.update_counter = 0
+        self.update_threshold = 1000  # จำนวนตัวอย่างก่อนการปรับปรุง
+        self.training_examples = []
         
         # ข้อมูลส่วนบุคคลที่ต้องการปกปิด
         # ข้อมูลส่วนบุคคลที่ต้องการปกปิด
