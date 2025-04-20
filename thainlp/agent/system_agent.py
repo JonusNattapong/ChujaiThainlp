@@ -5,6 +5,7 @@ from typing import Dict, List, Any, Optional
 import os
 import psutil
 import logging
+import torch
 from datetime import datetime
 from .thai_agent import ThaiLanguageAgent
 from .learning_engine import ContinuousLearningEngine
