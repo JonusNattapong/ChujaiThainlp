@@ -1,7 +1,7 @@
 """
 Input and output validation for Thai NLP tasks
 """
-from typing import List, Dict, Any, Union
+from typing import List, Dict, Any, Union, Tuple
 import re
 from dataclasses import dataclass
 import torch

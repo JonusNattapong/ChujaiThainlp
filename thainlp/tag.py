@@ -10,7 +10,7 @@ from transformers import (
 )
 from .tokenization import word_tokenize
 from .pos_tagging.hmm_tagger import HMMTagger
-from ..model_hub import get_model_info
+from .model_hub import get_model_info
 
 class ThaiPOSTagger:
     """Advanced Thai POS tagger with transformer and HMM support"""
