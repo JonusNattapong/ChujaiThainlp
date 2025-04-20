@@ -4,13 +4,13 @@ Voice Activity Detection Module
 from typing import Union, List, Tuple
 import numpy as np
 import torch
-from transformers import AutoModelForAudioClassification, AutoFeatureExtractor
+from transformers import Wav2Vec2Processor, Wav2Vec2Model
 
 class VoiceActivityDetector:
     """Detect speech segments in audio"""
     
     def __init__(self,
-                model_name: str = "thainer-vad",
+                model_name: str = "facebook/wav2vec2-base",
                 device: str = "cuda" if torch.cuda.is_available() else "cpu"):
         """
         Initialize VAD model
@@ -24,10 +24,10 @@ class VoiceActivityDetector:
         self._load_model()
         
     def _load_model(self):
-        """Load VAD model and feature extractor"""
-        self.feature_extractor = AutoFeatureExtractor.from_pretrained(self.model_name)
-        self.model = AutoModelForAudioClassification.from_pretrained(self.model_name).to(self.device)
-        self.sample_rate = self.feature_extractor.sampling_rate
+        """Load Wav2Vec2 model for VAD"""
+        self.processor = Wav2Vec2Processor.from_pretrained(self.model_name)
+        self.model = Wav2Vec2Model.from_pretrained(self.model_name).to(self.device)
+        self.sample_rate = 16000
         self.frame_duration = 0.02  # 20ms frames
         self.min_speech_duration = 0.3  # Minimum speech segment duration
         
@@ -59,45 +59,40 @@ class VoiceActivityDetector:
         speech_segments = []
         current_segment = None
         
-        for i in range(num_frames):
-            start = i * frame_size
-            end = start + frame_size
-            frame = audio[start:end]
-            
-            # Extract features
-            inputs = self.feature_extractor(
-                frame,
-                sampling_rate=self.sample_rate,
-                return_tensors="pt"
-            ).to(self.device)
-            
-            # Predict
-            with torch.no_grad():
-                outputs = self.model(**inputs)
-                probs = torch.softmax(outputs.logits, dim=-1)
-                speech_prob = probs[0, 1].item()  # Assuming class 1 is speech
+        # Process audio with Wav2Vec2
+        inputs = self.processor(
+            audio,
+            sampling_rate=self.sample_rate,
+            return_tensors="pt"
+        ).to(self.device)
+        
+        with torch.no_grad():
+            outputs = self.model(**inputs)
+            # Use feature activations to detect speech
+            features = outputs.last_hidden_state.squeeze()
+            energy = torch.norm(features, dim=-1)
+            # Normalize energy
+            energy = (energy - energy.mean()) / energy.std()
                 
-            # Detect speech
-            if speech_prob >= threshold:
-                start_time = i * self.frame_duration
+        # Detect speech segments based on energy
+        for i in range(len(energy)):
+            frame_energy = energy[i].item()
+            if frame_energy > threshold:
+                time = i * self.frame_duration
                 if current_segment is None:
-                    current_segment = [start_time, start_time + self.frame_duration]
+                    current_segment = [time, time + self.frame_duration]
                 else:
-                    current_segment[1] = start_time + self.frame_duration
-            else:
-                if current_segment is not None:
-                    # Only keep segments longer than minimum duration
-                    duration = current_segment[1] - current_segment[0]
-                    if duration >= self.min_speech_duration:
-                        speech_segments.append(tuple(current_segment))
-                    current_segment = None
-                    
-        # Add final segment if needed
+                    current_segment[1] = time + self.frame_duration
+            elif current_segment is not None:
+                if current_segment[1] - current_segment[0] >= self.min_speech_duration:
+                    speech_segments.append(tuple(current_segment))
+                current_segment = None
+        
+        # Handle last segment
         if current_segment is not None:
-            duration = current_segment[1] - current_segment[0]
-            if duration >= self.min_speech_duration:
+            if current_segment[1] - current_segment[0] >= self.min_speech_duration:
                 speech_segments.append(tuple(current_segment))
-                
+        
         return speech_segments
         
     def _load_audio_file(self, path: str) -> np.ndarray:

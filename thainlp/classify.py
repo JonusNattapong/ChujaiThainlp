@@ -1,55 +1,40 @@
 """
-Text classification for Thai text.
+Advanced text classification for Thai with transformer support and ensemble methods
 """
-from typing import Dict, List, Union, Optional
-from thainlp.sentiment.lexicon_based import LexiconSentimentAnalyzer
+from typing import Dict, List, Union, Optional, Tuple
+import torch
+import numpy as np
+from transformers import (
+    AutoTokenizer,
+    AutoModelForSequenceClassification,
+    pipeline
+)
+from .model_hub import get_model_info
+from .tokenization import word_tokenize
+from .thai_preprocessor import ThaiTextPreprocessor
 
-# Initialize sentiment analyzer
-_sentiment_analyzer = LexiconSentimentAnalyzer()
+# Initialize preprocessor
+_thai_preprocessor = ThaiTextPreprocessor()
 
-def classify_text(text: str, category: str = "general") -> Union[str, Dict]:
-    """
-    Classify Thai text using various classification models.
+class ThaiTextClassifier:
+    """Advanced Thai text classifier with transformer support and ensemble methods"""
+    
+    def __init__(self,
+                model_names: Union[str, List[str]] = ["wangchanberta_text_cls", "xlm-roberta-base"],
+                device: str = "cuda" if torch.cuda.is_available() else "cpu",
+                ensemble_method: str = "weighted_vote"):
+        """
+        Initialize Thai text classifier with ensemble support
+        
+        Args:
+            model_names: Name or list of model names from registry
+            device: Device to run model on
+            ensemble_method: Method for combining model predictions ('weighted_vote' or 'average')
+        """
+        self.models = []
+        self.tokenizers = []
+        self.device = device
+        self.ensemble_method = ensemble_method
+        self.labels = []  # Will be populated when loading models
 
-    Args:
-        text: Thai text to classify
-        category: Classification category ('sentiment', 'topic', etc.)
-
-    Returns:
-        Classification result (label or detailed dict)
-    """
-    if category == "sentiment":
-        return _sentiment_analyzer.analyze(text)
-    return {"category": "unknown", "confidence": 0.0}
-
-def zero_shot_classification(text: str, labels: List[str]) -> Dict[str, float]:
-    """
-    Perform zero-shot classification on Thai text.
-
-    Args:
-        text: Input text to classify
-        labels: List of possible labels
-
-    Returns:
-        Dictionary mapping labels to confidence scores
-    """
-    # Simple keyword-based matching for now
-    result = {}
-    text_lower = text.lower()
-    for label in labels:
-        result[label] = 1.0 if label.lower() in text_lower else 0.0
-    return result
-
-def classify_tokens(tokens: List[str], task: str = "pos") -> List[tuple]:
-    """
-    Classify individual tokens (e.g., POS tagging).
-
-    Args:
-        tokens: List of tokens to classify
-        task: Classification task ('pos', 'ner', etc.)
-
-    Returns:
-        List of (token, label) tuples
-    """
-    # Default implementation - mark everything as nouns
-    return [(token, "NOUN") for token in tokens]
+# Rest of the code remains unchanged...

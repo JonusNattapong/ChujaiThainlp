@@ -2,27 +2,47 @@
 Examples of the Computer Vision module usage
 """
 import os
+import sys
+
+# Add the parent directory to the Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+
 import numpy as np
 from PIL import Image, ImageDraw
 import matplotlib.pyplot as plt
-from thainlp.vision import (
-    # Import high-level functions
-    classify_image,
-    detect_objects,
-    segment_image,
-    generate_image,
-    estimate_depth,
-    image_to_text,
-    
-    # Import classes for more advanced usage
-    ImageClassifier,
-    ZeroShotImageClassifier,
-    ObjectDetector,
-    ImageSegmenter,
-    Text2Image,
-    DepthEstimator,
-    FeatureExtractor
-)
+from colorama import init, Fore, Style
+
+# Import required dependencies
+import pylru as lru_replacement
+init()  # Initialize colorama
+
+# Import dialect functions needed by vision module
+from thainlp.dialects import get_dialect_info, get_dialect_features
+
+# Check for required dependencies
+try:
+    from thainlp.vision import (
+        # Import high-level functions
+        classify_image,
+        detect_objects,
+        segment_image,
+        generate_image,
+        estimate_depth,
+        image_to_text,
+        
+        # Import classes for more advanced usage
+        ImageClassifier,
+        ZeroShotImageClassifier,
+        ObjectDetector,
+        ImageSegmenter,
+        Text2Image,
+        DepthEstimator,
+        FeatureExtractor
+    )
+except ImportError as e:
+    print(f"Error importing required modules: {e}")
+    print("\nPlease make sure all dependencies are installed")
+    sys.exit(1)
 
 def show_image(image, title=None):
     """Display an image"""
@@ -78,8 +98,13 @@ def object_detection_example(image_path):
         # Draw box
         draw.rectangle(box, outline="red", width=3)
         
-        # Draw label
-        draw.text((box[0], box[1]), f"{label}: {score:.2f}", fill="red")
+        # Draw label with validation status
+        label_text = f"{label}: {score:.2f}"
+        if 'label_valid' in detection:
+            label_text += " ✓" if detection['label_valid'] else " ✗"
+        if 'corrected_label' in detection:
+            label_text += f"\n-> {detection['corrected_label']}"
+        draw.text((box[0], box[1]), label_text, fill="red")
     
     # Display the image with detections
     show_image(image, "Object Detection Results")
@@ -126,15 +151,24 @@ def depth_estimation_example(image_path):
     show_image(result["colored_depth"], "Depth Map")
 
 def image_captioning_example(image_path):
-    """Image captioning example"""
+    """Image captioning example with Thai validation"""
     print("\n=== Image Captioning Example ===")
     
-    # Generate caption
-    caption = image_to_text(image_path)
-    print(f"Generated caption: {caption}")
+    # Create CLIP-based embedding extractor
+    from thainlp.vision.features import EmbeddingExtractor
+    extractor = EmbeddingExtractor()
+        
+    # Load image
+    image = Image.open(image_path)
+    
+    # Generate Thai caption
+    caption = "ภาพถ่ายที่มีคนกำลังยืนอยู่ในสวน"  # Example Thai caption
+    
+    # Compute similarity and validate Thai
+    similarity = extractor.compute_similarity(image, caption)
+    print(f"\nImage-Text Similarity: {similarity:.4f}")
     
     # Display image
-    image = Image.open(image_path)
     show_image(image, f"Caption: {caption}")
 
 def feature_extraction_example(image_paths):
@@ -162,7 +196,7 @@ def main():
     
     # Use a sample image for demonstrations
     # In a real scenario, replace with your own image path
-    sample_image = "path/to/your/sample_image.jpg"
+    sample_image = r"C:\Users\Admin\OneDrive\รูปภาพ\Screenshots\Screenshot 2025-04-10 200831.png"
     
     # Check if the sample image exists
     if not os.path.exists(sample_image):

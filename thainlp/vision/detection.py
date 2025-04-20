@@ -13,6 +13,7 @@ from transformers import (
     OwlViTForObjectDetection
 )
 from .base import VisionBase
+from thainlp.spellcheck.spell_checker import ThaiSpellChecker  # Fixed import
 
 class ObjectDetector(VisionBase):
     """Object detection using transformer models"""
@@ -80,10 +81,15 @@ class ObjectDetector(VisionBase):
             # Process predictions for each image
             batch_results = []
             for i, (preds, size) in enumerate(zip(outputs.pred_boxes, sizes)):
-                # Get scores and labels
-                scores = outputs.pred_scores[i]
-                labels = outputs.pred_labels[i]
+                # Get boxes and logits
+                logits = outputs.logits[i]
                 boxes = outputs.pred_boxes[i]
+                
+                # Convert logits to probabilities
+                probs = logits.softmax(-1)
+                
+                # Get max probability and corresponding label for each box
+                scores, labels = probs.max(-1)
                 
                 # Filter by threshold
                 mask = scores >= threshold
@@ -106,11 +112,20 @@ class ObjectDetector(VisionBase):
                 detections = []
                 for score, label_id, box in zip(filtered_scores, filtered_labels, scaled_boxes):
                     label = self.model.config.id2label[label_id.item()]
-                    detections.append({
+                    # Validate Thai labels
+                    spell_checker = ThaiSpellChecker()
+                    is_valid, corrected = spell_checker.validate_label(label)
+                    
+                    detection = {
                         "label": label,
                         "score": score.item(),
-                        "box": box
-                    })
+                        "box": box,
+                        "label_valid": is_valid
+                    }
+                    if corrected:
+                        detection["corrected_label"] = corrected
+                        
+                    detections.append(detection)
                     
                 batch_results.append(detections)
                 

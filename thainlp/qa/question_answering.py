@@ -1,447 +1,27 @@
 """
-Advanced question answering system supporting both text and table QA
+Advanced Thai question answering system with specialized preprocessing and multilingual support
 """
 from typing import List, Dict, Tuple, Optional, Union
+import re
 import torch
 import pandas as pd
 from transformers import (
     AutoTokenizer, 
     AutoModelForQuestionAnswering,
-    AutoModelForSeq2SeqLM
+    AutoModelForSeq2SeqLM,
+    pipeline
 )
 from sentence_transformers import SentenceTransformer, util
 from ..core.transformers import TransformerBase
 from ..tokenization import word_tokenize
+from ..thai_preprocessor import ThaiTextPreprocessor
 from ..similarity.sentence_similarity import SentenceSimilarity
 
-class QuestionAnswering(TransformerBase):
-    """Question answering model supporting text and table inputs"""
+class ThaiQuestionAnswering(TransformerBase):
+    """Thai-specific question answering model with enhanced preprocessing"""
     
     def __init__(self, 
-                 model_name: str = "xlm-roberta-large-squad2",
-                 retriever_model: str = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
-                 device: str = "cuda" if torch.cuda.is_available() else "cpu",
-                 batch_size: int = 8,
-                 max_seq_length: int = 384,
-                 doc_stride: int = 128):
-        """Initialize QA model
-        
-        Args:
-            model_name: Name of QA model
-            retriever_model: Model for passage retrieval
-            device: Device to run model on
-            batch_size: Batch size for processing
-            max_seq_length: Maximum sequence length
-            doc_stride: Stride for document processing
-        """
-        super().__init__(model_name)
-        self.device = device
-        self.batch_size = batch_size
-        self.max_seq_length = max_seq_length
-        self.doc_stride = doc_stride
-        
-        # Load models
-        self.model = AutoModelForQuestionAnswering.from_pretrained(model_name).to(device)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        
-        # Load retriever model
-        self.retriever = SentenceTransformer(retriever_model).to(device)
-        
-        # Table QA model
-        self.table_model = AutoModelForSeq2SeqLM.from_pretrained(
-            "google/tapas-large-finetuned-wtq"
-        ).to(device)
-        self.table_tokenizer = AutoTokenizer.from_pretrained(
-            "google/tapas-large-finetuned-wtq"
-        )
-        
-    def answer_question(self,
-                       question: Union[str, List[str]],
-                       context: Union[str, pd.DataFrame],
-                       max_answer_len: int = 100,
-                       return_scores: bool = True,
-                       num_answers: int = 1) -> Union[Dict, List[Dict]]:
-        """Answer questions using either text or table context
-        
-        Args:
-            question: Question or list of questions
-            context: Text passage or pandas DataFrame
-            max_answer_len: Maximum answer length
-            return_scores: Whether to return confidence scores
-            num_answers: Number of answers to return per question
-            
-        Returns:
-            Dict or list of dicts containing:
-            - answer: Extracted answer text
-            - score: Confidence score (if return_scores=True)
-            - start: Start position in context (text QA only)
-            - end: End position in context (text QA only)
-        """
-        # Handle single question
-        if isinstance(question, str):
-            question = [question]
-            single_query = True
-        else:
-            single_query = False
-            
-        # Select QA approach based on context type
-        if isinstance(context, pd.DataFrame):
-            results = self._table_qa(question, context, num_answers)
-        else:
-            results = self._text_qa(
-                question, 
-                context,
-                max_answer_len,
-                return_scores,
-                num_answers
-            )
-            
-        return results[0] if single_query else results
-    
-    def _text_qa(self,
-                 questions: List[str],
-                 context: str,
-                 max_answer_len: int,
-                 return_scores: bool,
-                 num_answers: int) -> List[Dict]:
-        """Process text-based questions"""
-        # Split context into passages
-        passages = self._split_into_passages(context)
-        
-        # Get passage embeddings
-        passage_embeddings = self.retriever.encode(
-            passages, 
-            convert_to_tensor=True,
-            show_progress_bar=False
-        )
-        
-        results = []
-        for i in range(0, len(questions), self.batch_size):
-            batch_questions = questions[i:i + self.batch_size]
-            
-            # Get question embeddings
-            question_embeddings = self.retriever.encode(
-                batch_questions,
-                convert_to_tensor=True,
-                show_progress_bar=False
-            )
-            
-            # Find relevant passages
-            scores = util.cos_sim(question_embeddings, passage_embeddings)
-            top_k = min(3, len(passages))  # Use top 3 passages
-            top_passages = {}
-            
-            for q_idx, q_scores in enumerate(scores):
-                top_indices = q_scores.topk(top_k).indices
-                q_passages = [passages[idx] for idx in top_indices]
-                top_passages[q_idx] = q_passages
-                
-            # Get answers from relevant passages
-            batch_results = []
-            for q_idx, q in enumerate(batch_questions):
-                q_results = []
-                
-                for passage in top_passages[q_idx]:
-                    # Prepare inputs
-                    inputs = self.tokenizer(
-                        q,
-                        passage,
-                        max_length=self.max_seq_length,
-                        truncation=True,
-                        stride=self.doc_stride,
-                        return_overflowing_tokens=True,
-                        return_offsets_mapping=True,
-                        padding=True,
-                        return_tensors="pt"
-                    ).to(self.device)
-                    
-                    # Get predictions
-                    with torch.no_grad():
-                        outputs = self.model(**inputs)
-                        
-                    # Process outputs
-                    start_logits = outputs.start_logits
-                    end_logits = outputs.end_logits
-                    
-                    # Get top answer spans
-                    start_end_pairs = self._get_best_spans(
-                        start_logits[0],
-                        end_logits[0],
-                        max_answer_len,
-                        num_answers
-                    )
-                    
-                    for start_idx, end_idx, score in start_end_pairs:
-                        answer_tokens = inputs.input_ids[0][start_idx:end_idx + 1]
-                        answer = self.tokenizer.decode(answer_tokens)
-                        
-                        result = {
-                            'answer': answer,
-                            'context': passage,
-                        }
-                        
-                        if return_scores:
-                            result['score'] = score.item()
-                            
-                        q_results.append(result)
-                
-                # Sort by score
-                if return_scores:
-                    q_results = sorted(
-                        q_results, 
-                        key=lambda x: x['score'],
-                        reverse=True
-                    )[:num_answers]
-                else:
-                    q_results = q_results[:num_answers]
-                    
-                if num_answers == 1:
-                    batch_results.append(q_results[0])
-                else:
-                    batch_results.append(q_results)
-                    
-            results.extend(batch_results)
-            
-        return results
-    
-    def _table_qa(self,
-                  questions: List[str],
-                  table: pd.DataFrame,
-                  num_answers: int) -> List[Dict]:
-        """Process table-based questions"""
-        results = []
-        
-        for i in range(0, len(questions), self.batch_size):
-            batch_questions = questions[i:i + self.batch_size]
-            
-            # Prepare inputs
-            inputs = self.table_tokenizer(
-                table=table,
-                queries=batch_questions,
-                padding=True,
-                return_tensors="pt"
-            ).to(self.device)
-            
-            # Get predictions
-            with torch.no_grad():
-                outputs = self.table_model.generate(
-                    **inputs,
-                    max_length=64,
-                    num_return_sequences=num_answers
-                )
-                
-            # Process outputs
-            batch_results = []
-            for q_idx in range(len(batch_questions)):
-                q_outputs = outputs[q_idx * num_answers:(q_idx + 1) * num_answers]
-                answers = self.table_tokenizer.batch_decode(
-                    q_outputs, 
-                    skip_special_tokens=True
-                )
-                
-                if num_answers == 1:
-                    result = {'answer': answers[0]}
-                else:
-                    result = {'answers': answers}
-                    
-                batch_results.append(result)
-                
-            results.extend(batch_results)
-            
-        return results
-    
-    def _get_best_spans(self,
-                       start_logits: torch.Tensor,
-                       end_logits: torch.Tensor,
-                       max_len: int,
-                       num_spans: int) -> List[Tuple[int, int, float]]:
-        """Get best answer spans from logits"""
-        # Get top start/end scores
-        top_k = min(10, len(start_logits))  # Consider top 10 positions
-        start_top = start_logits.topk(top_k)
-        end_top = end_logits.topk(top_k)
-        
-        # Find best spans
-        best_spans = []
-        for start_idx in start_top.indices:
-            for end_idx in end_top.indices:
-                if end_idx < start_idx or end_idx - start_idx + 1 > max_len:
-                    continue
-                    
-                score = start_logits[start_idx] + end_logits[end_idx]
-                best_spans.append((start_idx, end_idx, score))
-                
-        # Sort by score and return top spans
-        best_spans = sorted(best_spans, key=lambda x: x[2], reverse=True)
-        return best_spans[:num_spans]
-    
-    def _split_into_passages(self, text: str, max_len: int = 500) -> List[str]:
-        """Split text into overlapping passages"""
-        sentences = []
-        current = []
-        current_len = 0
-        
-        # Split into sentences
-        for char in text:
-            current.append(char)
-            if char in {'。', '！', '？', '।', '។', '။', '၏', '?', '!', '.', '\n'}:
-                if current:
-                    sentence = ''.join(current).strip()
-                    sentences.append(sentence)
-                    current = []
-                    
-        if current:
-            sentences.append(''.join(current).strip())
-            
-        # Combine into passages
-        passages = []
-        current_passage = []
-        
-        for sentence in sentences:
-            if current_len + len(sentence) > max_len and current_passage:
-                passages.append(' '.join(current_passage))
-                current_passage = []
-                current_len = 0
-                
-            current_passage.append(sentence)
-            current_len += len(sentence)
-            
-        if current_passage:
-            passages.append(' '.join(current_passage))
-            
-        return [p for p in passages if p]
-    
-    def fine_tune(self,
-                 train_data: List[Dict],
-                 val_data: Optional[List[Dict]] = None,
-                 epochs: int = 3,
-                 learning_rate: float = 3e-5):
-        """Fine-tune the QA model
-        
-        Args:
-            train_data: List of dicts with 'question', 'context', 'answer' keys
-            val_data: Optional validation data
-            epochs: Number of training epochs
-            learning_rate: Learning rate
-        """
-        self.model.train()
-        optimizer = torch.optim.AdamW(self.model.parameters(), lr=learning_rate)
-        
-        for epoch in range(epochs):
-            total_loss = 0
-            
-            for i in range(0, len(train_data), self.batch_size):
-                batch_data = train_data[i:i + self.batch_size]
-                
-                # Prepare inputs
-                inputs = self.tokenizer(
-                    [d['question'] for d in batch_data],
-                    [d['context'] for d in batch_data],
-                    max_length=self.max_seq_length,
-                    truncation=True,
-                    padding=True,
-                    return_tensors="pt"
-                ).to(self.device)
-                
-                # Prepare labels
-                start_positions = []
-                end_positions = []
-                
-                for data in batch_data:
-                    answer_start = data['context'].find(data['answer'])
-                    answer_end = answer_start + len(data['answer'])
-                    
-                    # Convert to token positions
-                    char_to_token = inputs.char_to_token(len(start_positions), answer_start)
-                    if char_to_token is None:
-                        char_to_token = inputs.char_to_token(len(start_positions), answer_start - 1)
-                    start_positions.append(char_to_token)
-                    
-                    char_to_token = inputs.char_to_token(len(end_positions), answer_end)
-                    if char_to_token is None:
-                        char_to_token = inputs.char_to_token(len(end_positions), answer_end - 1)
-                    end_positions.append(char_to_token)
-                
-                start_positions = torch.tensor(start_positions).to(self.device)
-                end_positions = torch.tensor(end_positions).to(self.device)
-                
-                # Forward pass
-                outputs = self.model(
-                    **inputs,
-                    start_positions=start_positions,
-                    end_positions=end_positions
-                )
-                
-                loss = outputs.loss
-                total_loss += loss.item()
-                
-                # Backward pass
-                loss.backward()
-                optimizer.step()
-                optimizer.zero_grad()
-            
-            avg_loss = total_loss / len(train_data)
-            print(f"Epoch {epoch + 1}/{epochs} - Loss: {avg_loss:.4f}")
-            
-            # Validation
-            if val_data:
-                self.model.eval()
-                val_loss = 0
-                
-                with torch.no_grad():
-                    for i in range(0, len(val_data), self.batch_size):
-                        batch_data = val_data[i:i + self.batch_size]
-                        
-                        inputs = self.tokenizer(
-                            [d['question'] for d in batch_data],
-                            [d['context'] for d in batch_data],
-                            max_length=self.max_seq_length,
-                            truncation=True,
-                            padding=True,
-                            return_tensors="pt"
-                        ).to(self.device)
-                        
-                        start_positions = []
-                        end_positions = []
-                        for data in batch_data:
-                            answer_start = data['context'].find(data['answer'])
-                            answer_end = answer_start + len(data['answer'])
-                            
-                            char_to_token = inputs.char_to_token(
-                                len(start_positions),
-                                answer_start
-                            )
-                            start_positions.append(char_to_token)
-                            
-                            char_to_token = inputs.char_to_token(
-                                len(end_positions),
-                                answer_end
-                            )
-                            end_positions.append(char_to_token)
-                            
-                        start_positions = torch.tensor(start_positions).to(self.device)
-                        end_positions = torch.tensor(end_positions).to(self.device)
-                        
-                        outputs = self.model(
-                            **inputs,
-                            start_positions=start_positions,
-                            end_positions=end_positions
-                        )
-                        
-                        val_loss += outputs.loss.item()
-                        
-                avg_val_loss = val_loss / len(val_data)
-                print(f"Validation Loss: {avg_val_loss:.4f}")
-                self.model.train()
-
-# Define ThaiQuestionAnswering class as a wrapper around QuestionAnswering
-class ThaiQuestionAnswering(QuestionAnswering):
-    """
-    Thai Question Answering class, specialized for Thai language text
-    """
-    
-    def __init__(self, 
-                 model_name: str = "monsoon-nlp/bert-base-thai-squad",  # Thai-specific default
+                 model_name: str = "monsoon-nlp/bert-base-thai-squad",
                  retriever_model: str = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
                  device: str = "cuda" if torch.cuda.is_available() else "cpu",
                  batch_size: int = 8,
@@ -457,78 +37,473 @@ class ThaiQuestionAnswering(QuestionAnswering):
             max_seq_length: Maximum sequence length
             doc_stride: Stride for document processing
         """
-        super().__init__(
-            model_name=model_name,
-            retriever_model=retriever_model,
-            device=device,
-            batch_size=batch_size,
-            max_seq_length=max_seq_length,
-            doc_stride=doc_stride
-        )
+        super().__init__(model_name)
+        self.device = device
+        self.batch_size = batch_size
+        self.max_seq_length = max_seq_length
+        self.doc_stride = doc_stride
+        self.preprocessor = ThaiTextPreprocessor()
+        
+        # Load models
+        self.model = AutoModelForQuestionAnswering.from_pretrained(model_name).to(device)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        
+        # Load retriever model
+        self.retriever = SentenceTransformer(retriever_model).to(device)
+        
+        # Thai-specific patterns
+        self.thai_question_words = {
+            'ใคร', 'อะไร', 'ที่ไหน', 'เมื่อไหร่', 'เมื่อไร',
+            'ทำไม', 'อย่างไร', 'เท่าไหร่', 'เท่าไร', 'กี่'
+        }
         
     def preprocess_thai_text(self, text: str) -> str:
-        """Preprocess Thai text for better QA performance
+        """Enhanced preprocessing for Thai text
         
         Args:
-            text: Thai text to preprocess
+            text: Input Thai text
             
         Returns:
             Preprocessed text
         """
-        # Simple preprocessing for now - can be expanded with Thai-specific logic
-        return text.strip()
+        # Basic preprocessing
+        text = self.preprocessor.preprocess(text)
+        
+        # Handle Thai-specific patterns
+        text = self._normalize_thai_numbers(text)
+        text = self._expand_thai_abbreviations(text)
+        text = self._handle_thai_particles(text)
+        
+        return text
+        
+    def _normalize_thai_numbers(self, text: str) -> str:
+        """Convert Thai numerals to Arabic numerals"""
+        thai_digits = str.maketrans('๐๑๒๓๔๕๖๗๘๙', '0123456789')
+        return text.translate(thai_digits)
+        
+    def _expand_thai_abbreviations(self, text: str) -> str:
+        """Expand common Thai abbreviations"""
+        abbrev_map = {
+            'กทม': 'กรุงเทพมหานคร',
+            'จว.': 'จังหวัด',
+            'อ.': 'อำเภอ',
+            'ต.': 'ตำบล',
+            'รร.': 'โรงเรียน',
+            'มรภ.': 'มหาวิทยาลัยราชภัฏ',
+            'รพ.': 'โรงพยาบาล'
+        }
+        
+        for abbrev, full in abbrev_map.items():
+            text = re.sub(rf'\b{abbrev}\b', full, text)
+            
+        return text
+        
+    def _handle_thai_particles(self, text: str) -> str:
+        """Handle Thai particles and question markers"""
+        # Remove redundant question particles
+        text = re.sub(r'(ไหม|หรือไม่|มั้ย|รึเปล่า)\s*\?', '?', text)
+        
+        # Normalize question markers
+        text = re.sub(r'[\?？]+', '?', text)
+        
+        return text
+        
+    def _split_into_thai_passages(self, text: str, max_len: int = 500) -> List[str]:
+        """Split Thai text into passages respecting sentence boundaries
+        
+        Args:
+            text: Thai text to split
+            max_len: Maximum passage length
+            
+        Returns:
+            List of passages
+        """
+        # Thai sentence boundary markers
+        boundaries = {'|', '.', '?', '!', '\n', '।', '။', '၏', '。', '！', '？'}
+        
+        passages = []
+        current = []
+        current_len = 0
+        
+        # Split into sentences using Thai-aware rules
+        tokens = word_tokenize(text)
+        sentence = []
+        
+        for token in tokens:
+            sentence.append(token)
+            if any(b in token for b in boundaries):
+                if sentence:
+                    joined = ''.join(sentence)
+                    if current_len + len(joined) > max_len and current:
+                        passages.append(''.join(current))
+                        current = []
+                        current_len = 0
+                        
+                    current.append(joined)
+                    current_len += len(joined)
+                    sentence = []
+                    
+        if sentence:
+            joined = ''.join(sentence)
+            if current_len + len(joined) <= max_len:
+                current.append(joined)
+            else:
+                if current:
+                    passages.append(''.join(current))
+                current = [joined]
+                
+        if current:
+            passages.append(''.join(current))
+            
+        return passages
         
     def answer_question(self,
                        question: Union[str, List[str]],
                        context: Union[str, pd.DataFrame],
                        max_answer_len: int = 100,
                        return_scores: bool = True,
-                       num_answers: int = 1) -> Union[Dict, List[Dict]]:
-        """Answer questions using either text or table context, with Thai preprocessing
+                       num_answers: int = 1,
+                       translate_answer: bool = False) -> Union[Dict, List[Dict]]:
+        """Answer Thai questions with enhanced features
         
         Args:
-            question: Question or list of questions
+            question: Question or list of questions in Thai
             context: Text passage or pandas DataFrame
             max_answer_len: Maximum answer length
             return_scores: Whether to return confidence scores
             num_answers: Number of answers to return per question
+            translate_answer: Whether to translate answer to English
             
         Returns:
             Dict or list of dicts containing:
             - answer: Extracted answer text
+            - translated_answer: English translation (if requested)
             - score: Confidence score (if return_scores=True)
+            - context: Source passage
             - start: Start position in context (text QA only)
             - end: End position in context (text QA only)
         """
-        # Preprocess Thai text
+        # Preprocess inputs
         if isinstance(question, str):
-            question = self.preprocess_thai_text(question)
+            questions = [question]
+            single_query = True
         else:
-            question = [self.preprocess_thai_text(q) for q in question]
+            questions = question
+            single_query = False
             
+        questions = [self.preprocess_thai_text(q) for q in questions]
+        
         if isinstance(context, str):
             context = self.preprocess_thai_text(context)
             
-        # Call parent implementation
-        return super().answer_question(
-            question=question,
-            context=context,
-            max_answer_len=max_answer_len,
-            return_scores=return_scores,
-            num_answers=num_answers
+        # Get answers using appropriate method
+        if isinstance(context, pd.DataFrame):
+            results = self._table_qa(questions, context, num_answers)
+        else:
+            results = self._text_qa(
+                questions,
+                context,
+                max_answer_len,
+                return_scores,
+                num_answers
+            )
+            
+        # Translate answers if requested
+        if translate_answer:
+            translator = pipeline(
+                "translation",
+                model="Helsinki-NLP/opus-mt-th-en",
+                device=self.device
+            )
+            
+            for result in results:
+                if isinstance(result, dict):
+                    result['translated_answer'] = translator(result['answer'])[0]['translation_text']
+                elif isinstance(result, list):
+                    for r in result:
+                        r['translated_answer'] = translator(r['answer'])[0]['translation_text']
+                        
+        return results[0] if single_query else results
+        
+    def _text_qa(self,
+                 questions: List[str],
+                 context: str,
+                 max_answer_len: int,
+                 return_scores: bool,
+                 num_answers: int) -> List[Dict]:
+        """Process Thai text-based questions with improved context handling"""
+        # Split context into passages using Thai-aware splitting
+        passages = self._split_into_thai_passages(context)
+        
+        # Get passage embeddings
+        passage_embeddings = self.retriever.encode(
+            passages,
+            convert_to_tensor=True,
+            show_progress_bar=False
         )
+        
+        results = []
+        for i in range(0, len(questions), self.batch_size):
+            batch_questions = questions[i:i + self.batch_size]
+            
+            # Get question embeddings
+            question_embeddings = self.retriever.encode(
+                batch_questions,
+                convert_to_tensor=True,
+                show_progress_bar=False
+            )
+            
+            # Find relevant passages using improved similarity
+            scores = util.cos_sim(question_embeddings, passage_embeddings)
+            rerank_scores = self._rerank_passages(batch_questions, passages, scores)
+            
+            top_k = min(3, len(passages))
+            top_passages = {}
+            
+            for q_idx, q_scores in enumerate(rerank_scores):
+                top_indices = q_scores.topk(top_k).indices
+                q_passages = [passages[idx] for idx in top_indices]
+                top_passages[q_idx] = q_passages
+                
+            # Get answers from relevant passages
+            batch_results = []
+            for q_idx, q in enumerate(batch_questions):
+                q_results = []
+                
+                for passage in top_passages[q_idx]:
+                    inputs = self.tokenizer(
+                        q,
+                        passage,
+                        max_length=self.max_seq_length,
+                        truncation=True,
+                        stride=self.doc_stride,
+                        return_overflowing_tokens=True,
+                        return_offsets_mapping=True,
+                        padding=True,
+                        return_tensors="pt"
+                    ).to(self.device)
+                    
+                    with torch.no_grad():
+                        outputs = self.model(**inputs)
+                        
+                    start_logits = outputs.start_logits
+                    end_logits = outputs.end_logits
+                    
+                    start_end_pairs = self._get_best_spans(
+                        start_logits[0],
+                        end_logits[0],
+                        max_answer_len,
+                        num_answers
+                    )
+                    
+                    for start_idx, end_idx, score in start_end_pairs:
+                        answer_tokens = inputs.input_ids[0][start_idx:end_idx + 1]
+                        answer = self.tokenizer.decode(answer_tokens)
+                        
+                        result = {
+                            'answer': answer,
+                            'context': passage,
+                            'start': start_idx,
+                            'end': end_idx
+                        }
+                        
+                        if return_scores:
+                            result['score'] = score.item()
+                            
+                        q_results.append(result)
+                
+                # Sort and filter results
+                if return_scores:
+                    q_results = sorted(
+                        q_results,
+                        key=lambda x: x['score'],
+                        reverse=True
+                    )[:num_answers]
+                else:
+                    q_results = q_results[:num_answers]
+                    
+                if num_answers == 1:
+                    batch_results.append(q_results[0])
+                else:
+                    batch_results.append(q_results)
+                    
+            results.extend(batch_results)
+            
+        return results
+        
+    def _rerank_passages(self,
+                        questions: List[str],
+                        passages: List[str],
+                        initial_scores: torch.Tensor) -> torch.Tensor:
+        """Rerank passages using additional Thai-specific features"""
+        final_scores = initial_scores.clone()
+        
+        for i, question in enumerate(questions):
+            # Check for question word matches
+            q_words = set(word_tokenize(question))
+            question_types = q_words.intersection(self.thai_question_words)
+            
+            for j, passage in enumerate(passages):
+                p_words = set(word_tokenize(passage))
+                
+                # Boost score for passages containing question words
+                if question_types & p_words:
+                    final_scores[i, j] *= 1.2
+                    
+                # Boost score for numeric matches in quantity questions
+                if {'เท่าไหร่', 'เท่าไร', 'กี่'} & question_types:
+                    if bool(re.search(r'[0-9๐-๙]', passage)):
+                        final_scores[i, j] *= 1.1
+                        
+                # Boost score for temporal expressions in time questions
+                if {'เมื่อไหร่', 'เมื่อไร'} & question_types:
+                    if bool(re.search(r'วันที่|เดือน|ปี|เวลา|ช่วง', passage)):
+                        final_scores[i, j] *= 1.1
+                        
+        return final_scores
+        
+    def fine_tune(self,
+                 train_data: List[Dict],
+                 val_data: Optional[List[Dict]] = None,
+                 epochs: int = 3,
+                 learning_rate: float = 3e-5,
+                 warmup_steps: int = 500):
+        """Fine-tune the QA model on Thai data
+        
+        Args:
+            train_data: List of dicts with 'question', 'context', 'answer' keys
+            val_data: Optional validation data
+            epochs: Number of training epochs
+            learning_rate: Learning rate
+            warmup_steps: Number of warmup steps
+        """
+        from transformers import get_linear_schedule_with_warmup
+        
+        self.model.train()
+        optimizer = torch.optim.AdamW(self.model.parameters(), lr=learning_rate)
+        
+        # Create scheduler
+        num_training_steps = epochs * len(train_data) // self.batch_size
+        scheduler = get_linear_schedule_with_warmup(
+            optimizer,
+            num_warmup_steps=warmup_steps,
+            num_training_steps=num_training_steps
+        )
+        
+        for epoch in range(epochs):
+            total_loss = 0
+            
+            for i in range(0, len(train_data), self.batch_size):
+                batch_data = train_data[i:i + self.batch_size]
+                
+                # Preprocess batch data
+                questions = [self.preprocess_thai_text(d['question']) for d in batch_data]
+                contexts = [self.preprocess_thai_text(d['context']) for d in batch_data]
+                
+                # Prepare inputs
+                inputs = self.tokenizer(
+                    questions,
+                    contexts,
+                    max_length=self.max_seq_length,
+                    truncation=True,
+                    padding=True,
+                    return_tensors="pt"
+                ).to(self.device)
+                
+                # Prepare answer positions
+                start_positions = []
+                end_positions = []
+                
+                for data in batch_data:
+                    answer_start = data['context'].find(data['answer'])
+                    answer_end = answer_start + len(data['answer'])
+                    
+                    char_to_token = inputs.char_to_token(
+                        len(start_positions),
+                        answer_start
+                    )
+                    start_positions.append(char_to_token)
+                    
+                    char_to_token = inputs.char_to_token(
+                        len(end_positions),
+                        answer_end
+                    )
+                    end_positions.append(char_to_token)
+                    
+                start_positions = torch.tensor(start_positions).to(self.device)
+                end_positions = torch.tensor(end_positions).to(self.device)
+                
+                # Forward pass
+                outputs = self.model(
+                    **inputs,
+                    start_positions=start_positions,
+                    end_positions=end_positions
+                )
+                
+                loss = outputs.loss
+                total_loss += loss.item()
+                
+                # Backward pass
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
+                optimizer.step()
+                scheduler.step()
+                optimizer.zero_grad()
+            
+            avg_loss = total_loss / len(train_data)
+            print(f"Epoch {epoch + 1}/{epochs} - Loss: {avg_loss:.4f}")
+            
+            # Validation
+            if val_data:
+                self.model.eval()
+                val_loss = 0
+                correct_answers = 0
+                
+                with torch.no_grad():
+                    for i in range(0, len(val_data), self.batch_size):
+                        batch_data = val_data[i:i + self.batch_size]
+                        
+                        questions = [self.preprocess_thai_text(d['question']) for d in batch_data]
+                        contexts = [self.preprocess_thai_text(d['context']) for d in batch_data]
+                        
+                        inputs = self.tokenizer(
+                            questions,
+                            contexts,
+                            max_length=self.max_seq_length,
+                            truncation=True,
+                            padding=True,
+                            return_tensors="pt"
+                        ).to(self.device)
+                        
+                        for j, data in enumerate(batch_data):
+                            predicted_answer = self.answer_question(
+                                data['question'],
+                                data['context']
+                            )['answer']
+                            
+                            if predicted_answer.lower() in data['answer'].lower():
+                                correct_answers += 1
+                                
+                accuracy = correct_answers / len(val_data)
+                print(f"Validation Accuracy: {accuracy:.4f}")
+                
+                self.model.train()
 
-# Module level function
-def answer_question(question: str, context: str, **kwargs) -> Dict:
-    """Answer a question based on context
+def answer_question(question: str,
+                   context: str,
+                   model: str = "monsoon-nlp/bert-base-thai-squad",
+                   **kwargs) -> Dict:
+    """
+    Simplified interface for Thai question answering
     
     Args:
-        question: Question to answer
-        context: Text or table to find answer in
-        **kwargs: Additional arguments to pass to ThaiQuestionAnswering
+        question: Question in Thai
+        context: Context text in Thai
+        model: Model name to use
+        **kwargs: Additional arguments for ThaiQuestionAnswering
         
     Returns:
-        Dictionary with answer and metadata
+        Dict containing answer and metadata
     """
-    qa = ThaiQuestionAnswering()
+    qa = ThaiQuestionAnswering(model_name=model)
     return qa.answer_question(question, context, **kwargs)

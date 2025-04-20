@@ -10,10 +10,19 @@ import multiprocessing
 import queue
 import functools
 import pickle
-import lru
+import pylru as lru_replacement
 import mmap
 import re
 import unicodedata
+
+# Create a simple adapter if needed
+class LruAdapter:
+    @staticmethod
+    def LRU(size):
+        return lru_replacement.lrucache(size)
+
+# Replace original lru with our adapter
+lru = LruAdapter
 
 class MemoryOptimizer:
     """Optimize memory usage"""

@@ -1,6 +1,12 @@
 """
 Speech Processing Example
 """
+import os
+import sys
+
+# Add the parent directory to the Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+
 import numpy as np
 from thainlp.speech import (
     ThaiTTS,
@@ -8,8 +14,10 @@ from thainlp.speech import (
     VoiceActivityDetector,
     VoiceProcessor,
     AudioUtils,
+    SpeechSummarizer,
     synthesize,
-    transcribe
+    transcribe,
+    summarize_speech
 )
 
 def main():
@@ -30,20 +38,24 @@ def main():
     transcription = asr.transcribe("greeting.wav")
     print(f"Transcription: {transcription}")
     
-    print("\n=== Using transcribe() helper ===")
-    print(f"Transcript: {transcribe('greeting.wav')}")
+    print("\n=== Using transcribe() helper with Thai validation ===")
+    result = transcribe('greeting.wav', validate_thai=True)
+    print(f"Transcript: {result['text']}")
+    print(f"Valid Thai: {'✓' if result['valid_thai'] else '✗'}")
+    if 'corrected_text' in result:
+        print(f"Corrected: {result['corrected_text']}")
 
     print("\n=== Voice Activity Detection ===")
     vad = VoiceActivityDetector()
     segments = vad.detect("greeting.wav")
     print(f"Speech segments (seconds): {segments}")
 
-    print("\n=== Voice Conversion Example ===")
-    vp = VoiceProcessor()
-    # Assume we have source.wav and target_voice.wav
+    # Note: Voice conversion features are under development
+    # print("\n=== Voice Conversion Example ===")
+    # vp = VoiceProcessor()
     # converted = vp.convert_voice("source.wav", target_voice_id=10)
     # AudioUtils.save_audio(converted, vp.sample_rate, "converted.wav")
-    print("Voice conversion demo would run here with actual audio files")
+    # print("Voice conversion features coming soon...")
 
     print("\n=== Audio Processing Example ===")
     # Load, normalize and trim silence
@@ -52,6 +64,14 @@ def main():
     audio = AudioUtils.trim_silence(audio, sr)
     AudioUtils.save_audio(audio, sr, "processed.wav")
     print("Processed and saved to processed.wav")
+
+    print("\n=== Speech Summarization Example ===")
+    summarizer = SpeechSummarizer()
+    summary = summarizer.summarize("greeting.wav")
+    print(f"Summary: {summary}")
+    
+    print("\n=== Using summarize_speech() helper ===")
+    print(f"Summary: {summarize_speech('greeting.wav')}")
 
 if __name__ == "__main__":
     main()

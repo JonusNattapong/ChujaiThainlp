@@ -4,14 +4,14 @@ Thai Text-to-Speech Synthesis Module
 from typing import Union, Optional
 import numpy as np
 import torch
-from transformers import AutoModel, AutoTokenizer
+from transformers import VitsModel, AutoTokenizer
 from ..model_hub import ModelManager
 
 class ThaiTTS:
     """Thai text-to-speech synthesis"""
     
-    def __init__(self, 
-                model_name: str = "thainer-speech",
+    def __init__(self,
+                model_name: str = "facebook/mms-tts-tha",  # Use Facebook's MMS TTS model for Thai
                 device: str = "cuda" if torch.cuda.is_available() else "cpu"):
         """
         Initialize TTS model
@@ -32,24 +32,16 @@ class ThaiTTS:
         if not model_info or model_info['task'] != 'tts':
             raise ValueError(f"Model {self.model_name} not found or invalid for TTS")
 
-        self.model = AutoModel.from_pretrained(model_info['hf_id']).to(self.device)
+        self.model = VitsModel.from_pretrained(model_info['hf_id']).to(self.device)
         self.tokenizer = AutoTokenizer.from_pretrained(model_info['hf_id'])
-        self.sample_rate = model_info.get('sample_rate', 22050)
-        self.vocoder = None  # Will be lazy loaded if needed
-        
-    def _load_vocoder(self):
-        """Lazy load vocoder"""
-        if self.vocoder is None:
-            from transformers import AutoModel
-            # Load default vocoder
-            self.vocoder = AutoModel.from_pretrained("facebook/hifigan").to(self.device)
+        self.sample_rate = model_info.get('sample_rate', 16000)  # MMS-TTS uses 16kHz
         
     def synthesize(self, 
-                  text: str,
-                  speaker_id: Optional[int] = None,
-                  speed: float = 1.0,
-                  pitch: float = 1.0,
-                  **kwargs) -> np.ndarray:
+                   text: str,
+                   speaker_id: Optional[int] = None,
+                   speed: float = 1.0,
+                   pitch: float = 1.0,
+                   **kwargs) -> np.ndarray:
         """
         Synthesize speech from text
         
@@ -65,35 +57,54 @@ class ThaiTTS:
         # Preprocess and normalize text
         text = self._preprocess_text(text)
         
-        # Tokenize text
-        inputs = self.tokenizer(
-            text, 
-            return_tensors="pt"
-        ).to(self.device)
-        
-        # Add optional parameters
-        if speaker_id:
-            inputs['speaker_id'] = torch.tensor([speaker_id])
-        inputs['speed'] = torch.tensor([speed])
-        inputs['pitch'] = torch.tensor([pitch])
-        
-        # Generate mel spectrogram
-        with torch.no_grad():
-            outputs = self.model(**inputs)
-        
-        # Convert mel to waveform
-        self._load_vocoder()
-        with torch.no_grad():
-            audio = self.vocoder(outputs['mel_spectrogram'])
+        try:
+            # Tokenize input text
+            inputs = self.tokenizer(
+                text,
+                return_tensors="pt",
+                padding=True
+            ).to(self.device)
             
-        return audio.cpu().numpy().squeeze()
+            # Convert speaker_id if provided
+            if speaker_id is not None:
+                inputs['speaker_id'] = torch.tensor([speaker_id], device=self.device)
+            
+            # Generate audio with MMS-TTS
+            with torch.no_grad():
+                outputs = self.model(**inputs)
+                waveform = outputs.waveform[0].cpu().numpy()
+        except Exception as e:
+            raise RuntimeError(f"Error generating speech: {str(e)}")
+            
+        # Apply post-processing effects
+        if speed != 1.0 or pitch != 1.0:
+            try:
+                import librosa
+                # Speed change
+                if speed != 1.0:
+                    waveform = librosa.effects.time_stretch(waveform, rate=1/speed)
+                # Pitch adjustment
+                if pitch != 1.0:
+                    waveform = librosa.effects.pitch_shift(y=waveform, sr=self.sample_rate, n_steps=12 * np.log2(pitch))
+            except ImportError:
+                print("Warning: librosa not found. Speed and pitch adjustments skipped.")
+            
+        # Ensure output shape is correct
+        waveform = waveform.squeeze()
+        return waveform
 
     def _preprocess_text(self, text: str) -> str:
         """Preprocess text for TTS"""
-        # TODO: Add Thai-specific text normalization
         import re
-        text = re.sub(r'([!?,.:])', r' \1 ', text)  # Add space around punctuation
+        # Thai-specific text normalization
+        # Remove repeating spaces
+        text = re.sub(r'\s+', ' ', text)
+        # Add spaces around punctuation while preserving Thai characters
+        text = re.sub(r'([!?,.:]|[-])', r' \1 ', text)
+        # Clean up multiple spaces again and strip
         text = re.sub(r'\s+', ' ', text).strip()
+        # Ensure proper spacing around Thai characters
+        text = re.sub(r'([^-\s])([^-\s])', r'\1 \2', text)
         return text
 
     def save_to_file(self, 

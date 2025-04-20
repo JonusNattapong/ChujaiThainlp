@@ -4,16 +4,19 @@ Computer Vision functionality for ChujaiThaiNLP.
 This module provides state-of-the-art models and tools for various
 computer vision tasks in both 2D and 3D domains.
 """
+# Import dialect utils needed by vision modules
+from ..dialects import get_dialect_info, get_dialect_features
 
 from .base import VisionBase, VisionConfig
 from .classification import ImageClassifier, VideoClassifier, ZeroShotImageClassifier
 from .detection import ObjectDetector, ZeroShotObjectDetector, KeypointDetector
 from .segmentation import ImageSegmenter, InstanceSegmenter, PanopticSegmenter, MaskGenerator
 from .generation import (
-    Text2Image, Image2Image, Image2Video, 
+    Text2Image, Image2Image, Image2Video,
     Text2Video, UnconditionalGenerator
 )
 from .reconstruction import DepthEstimator, Image2Text, Text23DModel, Image23DReconstructor
+from .features import FeatureExtractor, EmbeddingExtractor
 from .features import FeatureExtractor, EmbeddingExtractor
 
 # Initialize default models
@@ -25,8 +28,12 @@ _feature_extractor = None
 
 __all__ = [
     # Base classes
-    'VisionBase', 
+    'VisionBase',
     'VisionConfig',
+    
+    # Dialect utils needed by vision modules
+    'get_dialect_info',
+    'get_dialect_features',
     
     # Classification
     'ImageClassifier',

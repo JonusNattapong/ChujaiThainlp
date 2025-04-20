@@ -839,3 +839,203 @@ class ThaiDialectProcessor(TransformerBase):
         # Cache and return results
         self._update_cache(self._regional_cache, cache_key, region_scores)
         return region_scores
+
+    def translate_from_standard(self, text: str, target_dialect: str) -> str:
+        """Translate text from standard Thai to a specific dialect
+
+        Args:
+            text (str): Text in standard Thai
+            target_dialect (str): Target dialect name
+
+        Returns:
+            str: Text translated to specified dialect
+        """
+        # Use text processor for optimization
+        text = self.text_processor.preprocess_text(text)
+
+        # Check if target dialect is valid
+        if target_dialect not in self.dialects:
+            raise ValueError(f"Unsupported dialect: {target_dialect}")
+
+        # If target is central/standard Thai, return original
+        if target_dialect == "central":
+            return text
+
+        # Get vocabulary mapping for target dialect
+        vocab = self.dialect_features[target_dialect].get("vocabulary", {})
+
+        # Perform word-for-word translation
+        words = text.split()
+        translated_words = []
+
+        for word in words:
+            # Look for standard Thai word in reverse vocab mapping
+            translated = None
+            for std_word, dialect_word in vocab.items():
+                if word == std_word:
+                    translated = dialect_word
+                    break
+            
+            # If no translation found, keep original word
+            if translated is None:
+                translated = word
+            
+            translated_words.append(translated)
+
+        return " ".join(translated_words)
+
+# Add high-level function for dialect detection
+def detect_dialect(text, threshold=0.5):
+    """
+    Detect dialect in a piece of text
+    
+    Args:
+        text (str): Input text to analyze
+        threshold (float): Confidence threshold for detection
+        
+    Returns:
+        dict: Dictionary containing detected dialect and confidence score
+    """
+    identifier = DialectIdentifier()
+    return identifier.identify(text, threshold=threshold)
+
+"""
+Thai Dialect Processing Module
+"""
+
+from typing import Dict, List, Optional, Union, Any
+import os
+from ..optimization.optimizer import TextProcessor
+
+class DialectProcessor:
+    """Base class for Thai dialect processing"""
+    
+    def __init__(self):
+        self.text_processor = TextProcessor()
+        self.supported_dialects = [
+            "northern", "northeastern", "southern", "central"
+        ]
+    
+    def process(self, text: str) -> str:
+        """Process text with dialect awareness"""
+        return self.text_processor.preprocess_text(text)
+    
+    def is_supported_dialect(self, dialect: str) -> bool:
+        """Check if a dialect is supported"""
+        return dialect.lower() in self.supported_dialects
+
+class DialectIdentifier(DialectProcessor):
+    """Identify Thai dialects in text"""
+    
+    def __init__(self):
+        super().__init__()
+        
+    def identify(self, text: str, threshold: float = 0.5) -> Dict[str, Any]:
+        """Identify the dialect of a text"""
+        # Simple placeholder implementation
+        # In a real implementation, this would use a machine learning model
+        processed_text = self.process(text)
+        
+        # Placeholder: return central Thai as default
+        return {
+            "dialect": "central",
+            "confidence": 0.95,
+            "alternatives": {
+                "northeastern": 0.03,
+                "northern": 0.01,
+                "southern": 0.01
+            }
+        }
+
+class DialectTranslator(DialectProcessor):
+    """Translate between Thai dialects"""
+    
+    def __init__(self):
+        super().__init__()
+    
+    def translate(self, text: str, source_dialect: str = "auto", 
+                 target_dialect: str = "central") -> Dict[str, Any]:
+        """Translate text between dialects"""
+        if source_dialect == "auto":
+            # Detect source dialect
+            detection = detect_dialect(text)
+            source_dialect = detection["dialect"]
+        
+        # Check if dialects are supported
+        if not self.is_supported_dialect(source_dialect):
+            raise ValueError(f"Unsupported source dialect: {source_dialect}")
+            
+        if not self.is_supported_dialect(target_dialect):
+            raise ValueError(f"Unsupported target dialect: {target_dialect}")
+            
+        # If source and target are the same, return original text
+        if source_dialect == target_dialect:
+            return {
+                "translated_text": text,
+                "source_dialect": source_dialect,
+                "target_dialect": target_dialect
+            }
+        
+        # Simple placeholder implementation
+        # In a real implementation, this would use a translation model
+        processed_text = self.process(text)
+        
+        return {
+            "translated_text": processed_text,  # Just return processed text as placeholder
+            "source_dialect": source_dialect,
+            "target_dialect": target_dialect
+        }
+
+# High-level functions for easy access
+
+def detect_dialect(text: str, threshold: float = 0.5) -> Dict[str, Any]:
+    """
+    Detect dialect in a piece of text
+    
+    Args:
+        text (str): Input text to analyze
+        threshold (float): Confidence threshold for detection
+        
+    Returns:
+        dict: Dictionary containing detected dialect and confidence score
+    """
+    identifier = DialectIdentifier()
+    return identifier.identify(text, threshold=threshold)
+
+def identify_dialect(text: str) -> Dict[str, Any]:
+    """Alias for detect_dialect"""
+    return detect_dialect(text)
+
+def translate_dialect(text: str, source_dialect: str = "auto", 
+                      target_dialect: str = "central") -> Dict[str, Any]:
+    """
+    Translate text between Thai dialects
+    
+    Args:
+        text (str): Input text to translate
+        source_dialect (str): Source dialect (or 'auto' to detect)
+        target_dialect (str): Target dialect
+        
+    Returns:
+        dict: Dictionary with translated text and metadata
+    """
+    translator = DialectTranslator()
+    return translator.translate(text, source_dialect, target_dialect)
+
+def get_dialect_info() -> Dict[str, Dict]:
+    """
+    Get information about supported Thai dialects including names, regions, and codes
+    
+    Returns:
+        Dict containing metadata about all supported dialects
+    """
+    return DIALECTS
+
+def get_dialect_features() -> Dict[str, Dict]:
+    """
+    Get the dialect features dictionary containing vocabulary and patterns for each dialect
+    
+    Returns:
+        Dict containing dialect features for all supported dialects
+    """
+    return DIALECT_FEATURES

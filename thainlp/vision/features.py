@@ -12,6 +12,9 @@ from transformers import (
     CLIPModel
 )
 from .base import VisionBase
+# Fix imports
+from thainlp.spellcheck.spell_checker import ThaiSpellChecker
+from thainlp.utils.thai_text import colorize_thai_validation  # Corrected import path
 
 class FeatureExtractor(VisionBase):
     """Extract features from images using vision models"""
@@ -225,12 +228,32 @@ class EmbeddingExtractor(VisionBase):
             else:
                 batch_results = [emb.cpu().numpy() for emb in outputs]
                 
-            return batch_results
+            # Validate Thai text embeddings
+            spell_checker = ThaiSpellChecker()
+            
+            validated_results = []
+            for text, emb in zip(batch_texts, batch_results):
+                is_valid, corrected = spell_checker.validate_label(text)
+                validated_results.append({
+                    "embedding": emb,
+                    "text": text,
+                    "valid_thai": is_valid,
+                    "corrected_text": corrected if corrected else None
+                })
+                
+            return validated_results
             
         results = self.batch_process(
             texts,
             process_batch
         )
+        
+        # Separate embeddings from validation results if not returning tensors
+        if not return_tensors:
+            embeddings = [r["embedding"] for r in results]
+            validations = [{k:v for k,v in r.items() if k != "embedding"} for r in results] 
+            self.last_validation = validations
+            results = embeddings
         
         return results[0] if single_input else results
     
@@ -267,5 +290,13 @@ class EmbeddingExtractor(VisionBase):
         
         # Return single score or matrix
         if similarity.shape == (1, 1):
-            return float(similarity[0, 0])
+            sim_value = float(similarity[0, 0])
+            
+            # Include validation information in result
+            if hasattr(self, 'last_validation'):
+                print("\nThai Text Validation:")
+                for val in self.last_validation:
+                    print(colorize_thai_validation(val, indent=2))
+                    
+            return sim_value
         return similarity

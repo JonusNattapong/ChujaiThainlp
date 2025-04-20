@@ -74,9 +74,153 @@ _MODEL_REGISTRY: Dict[str, ModelInfo] = {
          "tags": ["sentiment", "transformer", "wangchanberta", "wisesight"],
      },
 
-    # --- Other Models (Add as needed) ---
-    # "wangchanberta_qa": { ... }
-    # "mt5_translation_th_en": { ... }
+    # --- Speech Models ---
+    "thainer-speech": {
+        "name": "thainer-speech",
+        "task": "tts",
+        "description": "Thai Text-to-Speech model based on ESPnet",
+        "source": "huggingface",
+        "hf_id": "airesearch/thainer-speech-tts",  # Example ID - replace with actual model
+        "framework": "pytorch",
+        "tags": ["speech", "tts", "audio", "thainer"],
+    },
+
+    # --- Speech Models ---
+    "facebook/mms-tts-tha": {
+        "name": "facebook/mms-tts-tha",
+        "task": "tts",
+        "description": "Facebook's Massively Multilingual Speech TTS model for Thai",
+        "source": "huggingface",
+        "hf_id": "facebook/mms-tts-tha",
+        "framework": "pytorch",
+        "tags": ["speech", "tts", "audio", "mms", "facebook"],
+        "sample_rate": 16000,
+        "language": "tha",
+        "requires": ["transformers>=4.31.0", "torch", "librosa"]  # Add required dependencies
+    },
+
+    # --- ASR Models ---
+    "openai/whisper-large-v3-turbo": {
+        "name": "openai/whisper-large-v3-turbo",
+        "task": "asr",
+        "description": "OpenAI's Whisper Large V3 Turbo model - high accuracy multilingual ASR",
+        "source": "huggingface",
+        "hf_id": "openai/whisper-large-v3-turbo",
+        "framework": "pytorch",
+        "tags": ["speech", "asr", "audio", "whisper", "openai"],
+        "sample_rate": 16000,
+        "language": "tha",
+        "requires": ["transformers>=4.31.0", "torch", "librosa"]
+    },
+
+    # --- Speech Summarization ---
+    "openai/whisper-large-v3": {
+        "name": "openai/whisper-large-v3",
+        "task": "speech-summarization",
+        "description": "OpenAI's Whisper Large V3 model for speech summarization",
+        "source": "huggingface", 
+        "hf_id": "openai/whisper-large-v3",
+        "framework": "pytorch",
+        "tags": ["speech", "summarization", "whisper", "openai"],
+        "sample_rate": 16000,
+        "language": "multilingual",
+        "requires": ["transformers>=4.31.0", "torch", "librosa"]
+    },
+
+    # --- Audio Classification ---
+    "speechbrain/lang-id-voxlingua107-ecapa": {
+        "name": "speechbrain/lang-id-voxlingua107-ecapa",
+        "task": "audio-classification",
+        "description": "SpeechBrain's ECAPA-TDNN model for language identification",
+        "source": "huggingface",
+        "hf_id": "speechbrain/lang-id-voxlingua107-ecapa",
+        "framework": "pytorch",
+        "tags": ["speech", "classification", "language-id", "speechbrain"],
+        "sample_rate": 16000,
+        "language": "multilingual",
+        "requires": ["speechbrain", "torch"]
+    },
+# --- Voice Activity Detection Models ---
+"facebook/wav2vec2-base": {
+    "name": "facebook/wav2vec2-base",
+    "task": "vad",
+    "description": "Facebook's Wav2Vec2 model used for voice activity detection",
+    "source": "huggingface",
+    "hf_id": "facebook/wav2vec2-base",
+    "framework": "pytorch",
+    "tags": ["speech", "vad", "audio", "facebook"],
+    "sample_rate": 16000,
+    "requires": ["transformers>=4.31.0", "torch"]
+},
+
+# --- Voice Processing Models ---
+"facebook/fastspeech2-en-200": {
+    "name": "facebook/fastspeech2-en-200",
+    "task": "voice-conversion",
+    "description": "Facebook's FastSpeech2 model for voice conversion",
+    "source": "huggingface",
+    "hf_id": "facebook/fastspeech2-en-200",
+    "framework": "pytorch",
+    "tags": ["speech", "voice", "conversion", "facebook"],
+    "sample_rate": 16000,
+    "requires": ["transformers>=4.31.0", "torch"]
+},
+
+# --- Other Models (Add as needed) ---
+    # --- Text Classification ---
+    "wangchanberta_text_cls": {
+        "name": "wangchanberta_text_cls",
+        "task": "text_classification",
+        "description": "WangchanBERTa for Thai text classification",
+        "source": "huggingface",
+        "hf_id": "airesearch/wangchanberta-base-att-spm-uncased",
+        "framework": "pytorch",
+        "tags": ["classification", "thai", "wangchanberta"]
+    },
+
+    # --- Token Classification ---
+    "wangchanberta_token_cls": {
+        "name": "wangchanberta_token_cls",
+        "task": "token_classification",
+        "description": "WangchanBERTa for Thai token classification (POS/NER)",
+        "source": "huggingface",
+        "hf_id": "airesearch/wangchanberta-base-att-spm-uncased-pos",
+        "framework": "pytorch",
+        "tags": ["ner", "pos", "thai", "wangchanberta"]
+    },
+
+    # --- Question Answering ---
+    "wangchanberta_qa": {
+        "name": "wangchanberta_qa",
+        "task": "question_answering",
+        "description": "WangchanBERTa for Thai question answering",
+        "source": "huggingface",
+        "hf_id": "airesearch/wangchanberta-base-att-spm-uncased-qa",
+        "framework": "pytorch",
+        "tags": ["qa", "thai", "wangchanberta"]
+    },
+
+    # --- Text Generation ---
+    "wangchanberta_generation": {
+        "name": "wangchanberta_generation",
+        "task": "text_generation",
+        "description": "WangchanBERTa for Thai text generation",
+        "source": "huggingface",
+        "hf_id": "airesearch/wangchanberta-base-att-spm-uncased",
+        "framework": "pytorch",
+        "tags": ["generation", "thai", "wangchanberta"]
+    },
+
+    # --- Translation ---
+    "mt5_th_en": {
+        "name": "mt5_th_en",
+        "task": "translation",
+        "description": "mT5 for Thai-English translation",
+        "source": "huggingface",
+        "hf_id": "google/mt5-base",
+        "framework": "pytorch",
+        "tags": ["translation", "thai", "english", "mt5"]
+    }
 }
 
 def list_models(task: Optional[str] = None, framework: Optional[str] = None, source: Optional[str] = None) -> List[ModelInfo]:

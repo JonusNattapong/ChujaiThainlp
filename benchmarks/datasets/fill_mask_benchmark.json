@@ -1,0 +1,159 @@
+{
+  "data": [
+    {
+      "masked_text": "เมื่อวานนี้ฉัน<mask>ไปเที่ยวทะเล",
+      "correct_token": "ได้",
+      "context": "การได้รับโอกาส"
+    },
+    {
+      "masked_text": "ประเทศไทย<mask>สภาพอากาศร้อนชื้น",
+      "correct_token": "มี",
+      "context": "สภาพภูมิอากาศ"
+    },
+    {
+      "masked_text": "แม่<mask>กับข้าวอยู่ในครัว",
+      "correct_token": "ทำ",
+      "context": "การประกอบอาหาร"
+    },
+    {
+      "masked_text": "พ่อ<mask>รถยนต์ไปทำงานทุกวัน",
+      "correct_token": "ขับ",
+      "context": "การเดินทาง"
+    },
+    {
+      "masked_text": "นักเรียน<mask>หนังสือในห้องสมุด",
+      "correct_token": "อ่าน",
+      "context": "การศึกษา"
+    },
+    {
+      "masked_text": "คุณยาย<mask>ขนมให้หลานๆ",
+      "correct_token": "ทำ",
+      "context": "ครอบครัว"
+    },
+    {
+      "masked_text": "ฉัน<mask>น้ำทุกวันเพื่อสุขภาพที่ดี",
+      "correct_token": "ดื่ม",
+      "context": "สุขภาพ"
+    },
+    {
+      "masked_text": "เด็กๆ<mask>เพลงชาติไทยทุกเช้า",
+      "correct_token": "ร้อง",
+      "context": "โรงเรียน"
+    },
+    {
+      "masked_text": "คุณหมอ<mask>ยาให้คนไข้",
+      "correct_token": "จ่าย",
+      "context": "การแพทย์"
+    },
+    {
+      "masked_text": "ชาวนา<mask>ข้าวในนาทุกปี",
+      "correct_token": "ปลูก",
+      "context": "การเกษตร"
+    },
+    {
+      "masked_text": "ชาวประมง<mask>ปลาในทะเล",
+      "correct_token": "จับ",
+      "context": "อาชีพ"
+    },
+    {
+      "masked_text": "พระอาทิตย์<mask>ที่ขอบฟ้า",
+      "correct_token": "ตก",
+      "context": "ธรรมชาติ"
+    },
+    {
+      "masked_text": "คนไทย<mask>อาหารรสจัด",
+      "correct_token": "ชอบ",
+      "context": "วัฒนธรรม"
+    },
+    {
+      "masked_text": "เธอ<mask>เพลงได้ไพเราะมาก",
+      "correct_token": "ร้อง",
+      "context": "ความสามารถ"
+    },
+    {
+      "masked_text": "หมา<mask>เสียงดังในตอนกลางคืน",
+      "correct_token": "เห่า",
+      "context": "สัตว์"
+    },
+    {
+      "masked_text": "พนักงาน<mask>งานอย่างขยันขันแข็ง",
+      "correct_token": "ทำ",
+      "context": "การทำงาน"
+    },
+    {
+      "masked_text": "นักกีฬา<mask>ซ้อมทุกวัน",
+      "correct_token": "ฝึก",
+      "context": "กีฬา"
+    },
+    {
+      "masked_text": "นักท่องเที่ยว<mask>รูปที่อนุสาวรีย์",
+      "correct_token": "ถ่าย",
+      "context": "การท่องเที่ยว"
+    },
+    {
+      "masked_text": "ครู<mask>หนังสือให้นักเรียนอ่าน",
+      "correct_token": "แจก",
+      "context": "การเรียนการสอน"
+    },
+    {
+      "masked_text": "ฉัน<mask>ทีวีทุกคืนก่อนนอน",
+      "correct_token": "ดู",
+      "context": "กิจวัตรประจำวัน"
+    },
+    {
+      "masked_text": "นายกรัฐมนตรี<mask>นโยบายใหม่",
+      "correct_token": "แถลง",
+      "context": "การเมือง"
+    },
+    {
+      "masked_text": "น้องสาว<mask>ขนมอร่อยเป็น",
+      "correct_token": "ทำ",
+      "context": "ครอบครัว"
+    },
+    {
+      "masked_text": "ผม<mask>รถใหม่เมื่อเดือนที่แล้ว",
+      "correct_token": "ซื้อ",
+      "context": "การซื้อสินค้า"
+    },
+    {
+      "masked_text": "เขา<mask>หนังสือทุกวัน",
+      "correct_token": "อ่าน",
+      "context": "งานอดิเรก"
+    },
+    {
+      "masked_text": "นักเรียนทุกคน<mask>การบ้านส่งครู",
+      "correct_token": "ทำ",
+      "context": "การศึกษา"
+    },
+    {
+      "masked_text": "ต้นไม้<mask>ใบเขียวชอุ่มในหน้าฝน",
+      "correct_token": "มี",
+      "context": "ธรรมชาติ"
+    },
+    {
+      "masked_text": "เด็กๆ<mask>ว่ายน้ำที่สระว่ายน้ำ",
+      "correct_token": "เรียน",
+      "context": "การศึกษา"
+    },
+    {
+      "masked_text": "คนขับรถ<mask>รถที่ลานจอดรถ",
+      "correct_token": "จอด",
+      "context": "การเดินทาง"
+    },
+    {
+      "masked_text": "ร้านอาหาร<mask>อาหารไทยรสชาติดี",
+      "correct_token": "ขาย",
+      "context": "อาหาร"
+    },
+    {
+      "masked_text": "นักวิทยาศาสตร์<mask>การทดลองในห้องปฏิบัติการ",
+      "correct_token": "ทำ",
+      "context": "วิทยาศาสตร์"
+    },
+    {
+      "masked_text": "ประชาชน<mask>ภาษีทุกปี",
+      "correct_token": "เสีย",
+      "context": "เศรษฐกิจ"
+    }
+  ]
+}
