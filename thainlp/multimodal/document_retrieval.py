@@ -372,7 +372,11 @@ class DocumentIndexer(VisualDocumentRetriever):
             # Pickle format is no longer supported for security reasons
             # Automatically convert to JSON
             json_path = os.path.splitext(index_path)[0] + '.json'
-            logging.warning(f"Pickle format is deprecated for security reasons. Saving as JSON: {json_path}")
+            # Use generic message to avoid leaking path information in logs
+            logging.warning(
+                "Pickle format is deprecated for security reasons. "
+                "Converting to secure JSON format automatically."
+            )
             
             serializable_data = index_data.copy()
             serializable_data["embeddings"] = [emb.tolist() for emb in index_data["embeddings"]]

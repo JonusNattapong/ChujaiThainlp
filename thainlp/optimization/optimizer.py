@@ -40,13 +40,14 @@ class MemoryOptimizer:
             # Create cache key using secure hash instead of pickle
             # Convert args and kwargs to a stable string representation
             try:
-                args_str = json.dumps(args, sort_keys=True, default=str)
-                kwargs_str = json.dumps(kwargs, sort_keys=True, default=str)
+                args_str = json.dumps(args, sort_keys=True, default=repr)
+                kwargs_str = json.dumps(kwargs, sort_keys=True, default=repr)
                 key_str = f"{args_str}:{kwargs_str}"
                 key = hashlib.sha256(key_str.encode()).hexdigest()
             except (TypeError, ValueError):
-                # Fallback to simple string hash for non-JSON-serializable objects
-                key = hashlib.sha256(str((args, kwargs)).encode()).hexdigest()
+                # Fallback to repr for non-JSON-serializable objects
+                # repr() provides more unique representation than str()
+                key = hashlib.sha256(repr((args, kwargs)).encode()).hexdigest()
             
             with self._lock:
                 if key in self.cache:
