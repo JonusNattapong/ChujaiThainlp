@@ -3,6 +3,7 @@ Visual document retrieval for finding and ranking documents based on content and
 """
 from typing import Dict, List, Union, Optional, Any, Tuple
 import os
+import logging
 import torch
 import numpy as np
 import json
@@ -371,7 +372,7 @@ class DocumentIndexer(VisualDocumentRetriever):
             # Pickle format is no longer supported for security reasons
             # Automatically convert to JSON
             json_path = os.path.splitext(index_path)[0] + '.json'
-            print(f"Warning: Pickle format is deprecated. Saving as JSON: {json_path}")
+            logging.warning(f"Pickle format is deprecated for security reasons. Saving as JSON: {json_path}")
             
             serializable_data = index_data.copy()
             serializable_data["embeddings"] = [emb.tolist() for emb in index_data["embeddings"]]

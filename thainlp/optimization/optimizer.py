@@ -11,6 +11,7 @@ import queue
 import functools
 import json
 import hashlib
+import logging
 import pylru as lru_replacement
 import mmap
 import re
@@ -160,7 +161,6 @@ class DiskCache:
                 json.dump(value, f, ensure_ascii=False, default=str)
         except (TypeError, ValueError) as e:
             # If value is not JSON serializable, log warning and skip caching
-            import logging
             logging.warning(f"Cannot cache non-serializable value for key {key}: {e}")
             
     def clear(self):
