@@ -6,7 +6,6 @@ import os
 import torch
 import numpy as np
 import json
-import pickle
 from PIL import Image
 from transformers import (
     AutoTokenizer,
@@ -126,26 +125,29 @@ class VisualDocumentRetriever(MultimodalBase):
         return results
     
     def _load_index(self, index_path: str) -> Dict[str, Any]:
-        """Load document index from file"""
+        """Load document index from file using secure JSON format only"""
         if not os.path.exists(index_path):
             raise FileNotFoundError(f"Index file not found: {index_path}")
             
-        # Load index based on file extension
+        # Load index - only support JSON format for security
         ext = os.path.splitext(index_path)[1].lower()
         
-        if ext == '.pkl':
-            with open(index_path, 'rb') as f:
-                index_data = pickle.load(f)
-        elif ext == '.json':
-            with open(index_path, 'r') as f:
+        if ext == '.json':
+            with open(index_path, 'r', encoding='utf-8') as f:
                 index_data = json.load(f)
                 # Convert string arrays to numpy arrays
                 if "embeddings" in index_data:
                     index_data["embeddings"] = np.array([
                         np.array(emb) for emb in index_data["embeddings"]
                     ])
+        elif ext == '.pkl':
+            # Pickle format is no longer supported for security reasons
+            raise ValueError(
+                f"Pickle format is not supported for security reasons. "
+                f"Please re-index using JSON format (.json extension)."
+            )
         else:
-            raise ValueError(f"Unsupported index format: {ext}")
+            raise ValueError(f"Unsupported index format: {ext}. Only JSON (.json) is supported.")
             
         return index_data
     
@@ -351,24 +353,36 @@ class DocumentIndexer(VisualDocumentRetriever):
         return index_data
     
     def _save_index(self, index_data: Dict[str, Any], index_path: str) -> None:
-        """Save document index to file"""
+        """Save document index to file using secure JSON format only"""
         # Create directory if it doesn't exist
         os.makedirs(os.path.dirname(os.path.abspath(index_path)), exist_ok=True)
         
-        # Save based on file extension
+        # Save based on file extension - only JSON is supported for security
         ext = os.path.splitext(index_path)[1].lower()
         
-        if ext == '.pkl':
-            with open(index_path, 'wb') as f:
-                pickle.dump(index_data, f)
-        elif ext == '.json':
+        if ext == '.json':
             # Convert numpy arrays to lists for JSON serialization
             serializable_data = index_data.copy()
             serializable_data["embeddings"] = [emb.tolist() for emb in index_data["embeddings"]]
             
-            with open(index_path, 'w') as f:
-                json.dump(serializable_data, f)
+            with open(index_path, 'w', encoding='utf-8') as f:
+                json.dump(serializable_data, f, ensure_ascii=False, indent=2)
+        elif ext == '.pkl':
+            # Pickle format is no longer supported for security reasons
+            # Automatically convert to JSON
+            json_path = os.path.splitext(index_path)[0] + '.json'
+            print(f"Warning: Pickle format is deprecated. Saving as JSON: {json_path}")
+            
+            serializable_data = index_data.copy()
+            serializable_data["embeddings"] = [emb.tolist() for emb in index_data["embeddings"]]
+            
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(serializable_data, f, ensure_ascii=False, indent=2)
         else:
-            # Default to pickle
-            with open(index_path + '.pkl', 'wb') as f:
-                pickle.dump(index_data, f)
+            # Default to JSON for security
+            json_path = index_path + '.json'
+            serializable_data = index_data.copy()
+            serializable_data["embeddings"] = [emb.tolist() for emb in index_data["embeddings"]]
+            
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(serializable_data, f, ensure_ascii=False, indent=2)

@@ -9,7 +9,8 @@ from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 import multiprocessing
 import queue
 import functools
-import pickle
+import json
+import hashlib
 import pylru as lru_replacement
 import mmap
 import re
@@ -35,8 +36,16 @@ class MemoryOptimizer:
         """Decorator for memoizing function results"""
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            # Create cache key
-            key = pickle.dumps((args, kwargs))
+            # Create cache key using secure hash instead of pickle
+            # Convert args and kwargs to a stable string representation
+            try:
+                args_str = json.dumps(args, sort_keys=True, default=str)
+                kwargs_str = json.dumps(kwargs, sort_keys=True, default=str)
+                key_str = f"{args_str}:{kwargs_str}"
+                key = hashlib.sha256(key_str.encode()).hexdigest()
+            except (TypeError, ValueError):
+                # Fallback to simple string hash for non-JSON-serializable objects
+                key = hashlib.sha256(str((args, kwargs)).encode()).hexdigest()
             
             with self._lock:
                 if key in self.cache:
@@ -129,25 +138,30 @@ class DiskCache:
         # Create safe filename from key
         filename = hashlib.sha256(
             key.encode()
-        ).hexdigest()
+        ).hexdigest() + ".json"
         return os.path.join(self.cache_dir, filename)
         
     def get(self, key: str) -> Optional[Any]:
-        """Get value from cache"""
+        """Get value from cache using secure JSON format"""
         cache_path = self._get_cache_path(key)
         
         try:
-            with open(cache_path, 'rb') as f:
-                return pickle.load(f)
-        except (FileNotFoundError, pickle.UnpicklingError):
+            with open(cache_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError, ValueError):
             return None
             
     def set(self, key: str, value: Any):
-        """Set value in cache"""
+        """Set value in cache using secure JSON format"""
         cache_path = self._get_cache_path(key)
         
-        with open(cache_path, 'wb') as f:
-            pickle.dump(value, f)
+        try:
+            with open(cache_path, 'w', encoding='utf-8') as f:
+                json.dump(value, f, ensure_ascii=False, default=str)
+        except (TypeError, ValueError) as e:
+            # If value is not JSON serializable, log warning and skip caching
+            import logging
+            logging.warning(f"Cannot cache non-serializable value for key {key}: {e}")
             
     def clear(self):
         """Clear all cached items"""
