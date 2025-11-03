@@ -9,6 +9,10 @@ import shutil
 from pathlib import Path
 import importlib.util
 
+# Module constants
+THAINLP_ROOT = Path(__file__).parent.parent.parent / "thainlp"
+OPTIMIZER_PATH = THAINLP_ROOT / "optimization" / "optimizer.py"
+
 # Direct import to avoid dependencies
 def import_module_from_path(module_name, file_path):
     spec = importlib.util.spec_from_file_location(module_name, file_path)
@@ -18,8 +22,7 @@ def import_module_from_path(module_name, file_path):
     return module
 
 # Import optimizer module directly
-optimizer_path = Path(__file__).parent.parent.parent / "thainlp" / "optimization" / "optimizer.py"
-optimizer = import_module_from_path("optimizer", optimizer_path)
+optimizer = import_module_from_path("optimizer", OPTIMIZER_PATH)
 
 MemoryOptimizer = optimizer.MemoryOptimizer
 DiskCache = optimizer.DiskCache
@@ -122,10 +125,8 @@ def test_disk_cache_non_serializable():
 
 def test_no_pickle_imports():
     """Verify that pickle is not imported in security-critical modules"""
-    # Read the source file directly
-    optimizer_path = Path(__file__).parent.parent.parent / "thainlp" / "optimization" / "optimizer.py"
-    
-    with open(optimizer_path, 'r') as f:
+    # Use constant defined at module level
+    with open(OPTIMIZER_PATH, 'r') as f:
         source = f.read()
     
     assert "import pickle" not in source, "optimizer.py should not import pickle"
